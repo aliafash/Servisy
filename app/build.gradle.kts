@@ -8,7 +8,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example"
+        applicationId = "com.aistudio.yemenser.kxpqs"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
