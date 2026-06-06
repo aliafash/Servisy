@@ -162,7 +162,9 @@ data class AdminSettingsEntity(
     val maxSearchRadiusKm: Int = 20,
     val isDataSaverActive: Boolean = false,
     val imageQualityPercent: Int = 75,
-    val showSubscriptionsFeature: Boolean = true
+    val showSubscriptionsFeature: Boolean = true,
+    val showLoyaltyFeature: Boolean = false,
+    val showAddFirestoreDirectly: Boolean = false
 )
 
 // ------ Unified Repository / DAO Interface ------
