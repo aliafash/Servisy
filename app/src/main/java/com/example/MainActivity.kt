@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -458,40 +459,182 @@ fun BoxScope.FloatingIconsOverlay(
     onAssistantClick: () -> Unit,
     onChatClick: () -> Unit
 ) {
+    val infiniteTransition = rememberInfiniteTransition(label = "floating_icon_effects")
+
+    // 1. Scale pulse parameters
+    val scalePulse by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.12f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scalePulse"
+    )
+
+    // 2. Halo glow expanding circle rings
+    val haloExpansion by infiniteTransition.animateFloat(
+        initialValue = 1.0f,
+        targetValue = 1.5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutLinearInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "haloExpansion"
+    )
+    val haloOpacity by infiniteTransition.animateFloat(
+        initialValue = 0.8f,
+        targetValue = 0.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutLinearInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "haloOpacity"
+    )
+
+    // 3. Rotating spinner
+    val continuousRotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(4000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "continuousRotation"
+    )
+
+    // 4. Glitch vibration offset jitter
+    val glitchOffsetDeltaX by infiniteTransition.animateFloat(
+        initialValue = -2.0f,
+        targetValue = 2.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(70, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "glitchOffsetDeltaX"
+    )
+    val glitchOffsetDeltaY by infiniteTransition.animateFloat(
+        initialValue = 1.5f,
+        targetValue = -1.5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(55, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "glitchOffsetDeltaY"
+    )
+
     // Left side: Smart Assistant bubble Services
     if (!settings.assistantHidden) {
+        val effect = settings.assistantIconEffects
+
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 16.dp, bottom = 48.dp)
-                .size(settings.assistantSize.dp)
-                .background(themeColors.accent, CircleShape)
-                .clickable { onAssistantClick() }
-                .border(1.dp, Color.White, CircleShape),
+                .padding(end = 16.dp, bottom = 48.dp),
             contentAlignment = Alignment.Center
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Icon(imageVector = Icons.Default.SmartToy, contentDescription = "المساعد", tint = Color.Black, modifier = Modifier.size(20.dp))
-                Text("خدمات", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+            // Glow aura background
+            if (effect == "glow") {
+                Box(
+                    modifier = Modifier
+                        .size(settings.assistantSize.dp * haloExpansion)
+                        .background(themeColors.accent.copy(alpha = haloOpacity), CircleShape)
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(settings.assistantSize.dp)
+                    .graphicsLayer {
+                        if (effect == "pulse") {
+                            scaleX = scalePulse
+                            scaleY = scalePulse
+                        }
+                        if (effect == "rotate") {
+                            rotationZ = continuousRotation
+                        }
+                        if (effect == "glitch") {
+                            translationX = glitchOffsetDeltaX
+                            translationY = glitchOffsetDeltaY
+                        }
+                    }
+                    .background(themeColors.accent, CircleShape)
+                    .clickable { onAssistantClick() }
+                    .border(2.dp, Color.White, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                val iconStr = settings.assistantIcon
+                if (iconStr.startsWith("content://") || iconStr.startsWith("http")) {
+                    Image(
+                        painter = rememberAsyncImagePainter(iconStr),
+                        contentDescription = "المساعد الذكي مخصص",
+                        modifier = Modifier.fillMaxSize().clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        Icon(imageVector = Icons.Default.SmartToy, contentDescription = "المساعد", tint = Color.Black, modifier = Modifier.size(20.dp))
+                        Text("خدمات", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                    }
+                }
             }
         }
     }
 
     // Chat Floating messenger (Above Assistant)
     if (!settings.chatHidden) {
+        val effect = settings.chatIconEffects
+
         Box(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(start = 16.dp, bottom = 48.dp)
-                .size(settings.chatSize.dp)
-                .background(themeColors.primary, CircleShape)
-                .clickable { onChatClick() }
-                .border(1.dp, Color.White, CircleShape),
+                .padding(start = 16.dp, bottom = 48.dp),
             contentAlignment = Alignment.Center
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Icon(imageVector = Icons.Default.Chat, contentDescription = "دردشة", tint = Color.White, modifier = Modifier.size(20.dp))
-                Text("دردشة", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            // Glow aura background
+            if (effect == "glow") {
+                Box(
+                    modifier = Modifier
+                        .size(settings.chatSize.dp * haloExpansion)
+                        .background(themeColors.primary.copy(alpha = haloOpacity), CircleShape)
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(settings.chatSize.dp)
+                    .graphicsLayer {
+                        if (effect == "pulse") {
+                            scaleX = scalePulse
+                            scaleY = scalePulse
+                        }
+                        if (effect == "rotate") {
+                            rotationZ = continuousRotation
+                        }
+                        if (effect == "glitch") {
+                            translationX = glitchOffsetDeltaX
+                            translationY = glitchOffsetDeltaY
+                        }
+                    }
+                    .background(themeColors.primary, CircleShape)
+                    .clickable { onChatClick() }
+                    .border(2.dp, Color.White, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                val iconStr = settings.chatIcon
+                if (iconStr.startsWith("content://") || iconStr.startsWith("http")) {
+                    Image(
+                        painter = rememberAsyncImagePainter(iconStr),
+                        contentDescription = "الدردشة مخصصة",
+                        modifier = Modifier.fillMaxSize().clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        Icon(imageVector = Icons.Default.Chat, contentDescription = "دردشة", tint = Color.White, modifier = Modifier.size(20.dp))
+                        Text("دردشة", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
             }
         }
     }
@@ -2917,6 +3060,29 @@ fun OwnerBackdoorPanelLayout(viewModel: MainViewModel, themeColors: VisualThemeP
             viewModel.triggerNotification("🖼️ تم اختيار صورة الترحيب بنجاح من الاستوديو!")
         }
     }
+
+    var botIconState by remember { mutableStateOf(settingsState.assistantIcon) }
+    var botIconEffectsState by remember { mutableStateOf(settingsState.assistantIconEffects) }
+    var chatIconState by remember { mutableStateOf(settingsState.chatIcon) }
+    var chatIconEffectsState by remember { mutableStateOf(settingsState.chatIconEffects) }
+
+    val botIconPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            botIconState = uri.toString()
+            viewModel.triggerNotification("🤖 تم اختيار وتعريف الأيقونة المخصصة للمساعد الذكي!")
+        }
+    }
+
+    val chatIconPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            chatIconState = uri.toString()
+            viewModel.triggerNotification("💬 تم اختيار وتعريف الأيقونة المخصصة للدردشة!")
+        }
+    }
     
     // Toggles
     var isMaintenance by remember { mutableStateOf(settingsState.isMaintenanceActive) }
@@ -3160,7 +3326,7 @@ fun OwnerBackdoorPanelLayout(viewModel: MainViewModel, themeColors: VisualThemeP
         item {
             Card(colors = CardDefaults.cardColors(containerColor = themeColors.surface)) {
                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("4. قنوات المساعد الذكي وأيقونة الدردشة العائمة:", fontWeight = FontWeight.Bold, color = themeColors.accent)
+                    Text("4. قنوات المساعد الذكي وأيقونة الدردشة العائمة والتبديل الديناميكي:", fontWeight = FontWeight.Bold, color = themeColors.accent)
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = robotHidden, onCheckedChange = { robotHidden = it })
@@ -3175,7 +3341,80 @@ fun OwnerBackdoorPanelLayout(viewModel: MainViewModel, themeColors: VisualThemeP
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    // --- SMART ASSISTANT CUSTOM ICON & EFFECTS ---
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text("🤖 تخصيص أيقونة المساعد الذكي والمؤثرات البصرية:", fontSize = 11.sp, color = themeColors.accent, fontWeight = FontWeight.Bold)
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = { botIconPickerLauncher.launch("image/*") },
+                            colors = ButtonDefaults.buttonColors(containerColor = themeColors.secondary),
+                            modifier = Modifier.weight(1.5f)
+                        ) {
+                            Text("رفع أيقونة PNG/SVG مخصصة 🖼️", fontSize = 9.sp, color = Color.White)
+                        }
+                        
+                        if (botIconState != "smart_bot") {
+                            Button(
+                                onClick = { botIconState = "smart_bot" },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("إعادة للافتراضي 🔄", fontSize = 9.sp, color = Color.White)
+                            }
+                        }
+                    }
+                    
+                    if (botIconState.startsWith("content://") || botIconState.startsWith("http")) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically, 
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.2f)).padding(6.dp)
+                        ) {
+                            Image(
+                                painter = rememberAsyncImagePainter(botIconState),
+                                contentDescription = null,
+                                modifier = Modifier.size(36.dp).clip(RoundedCornerShape(4.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                            Text("تم تحميل أيقونة مخصصة:\n${botIconState.take(30)}...", fontSize = 9.sp, color = Color.Green, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        Text("الأيقونة النشطة: أيقونة المساعد الافتراضية الذكية 🤖", fontSize = 9.sp, color = themeColors.textSecondary)
+                    }
+
+                    Text("حدد التأثير البصري الحي فوق المساعد الذكي:", fontSize = 10.sp, color = themeColors.textPrimary)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        listOf(
+                            "none" to "بدون تأثير",
+                            "pulse" to "نبض حيوي",
+                            "glow" to "توهج نيون",
+                            "rotate" to "دوران هادئ",
+                            "glitch" to "وميض رعاش"
+                        ).forEach { (code, label) ->
+                            val active = botIconEffectsState == code
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(if (active) themeColors.accent else Color.Black.copy(alpha = 0.2f))
+                                    .clickable { botIconEffectsState = code }
+                                    .padding(vertical = 6.dp, horizontal = 2.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(label, fontSize = 8.sp, color = if (active) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    Divider(color = themeColors.secondary.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 4.dp))
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = chatHidden, onCheckedChange = { chatHidden = it })
@@ -3189,6 +3428,79 @@ fun OwnerBackdoorPanelLayout(viewModel: MainViewModel, themeColors: VisualThemeP
                         label = { Text("حجم أيقونة الدردشة العائمة:") },
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    // --- CHAT MESSENGER CUSTOM ICON & EFFECTS ---
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text("💬 تخصيص أيقونة المحادثة الفورية والمؤثرات البصرية:", fontSize = 11.sp, color = themeColors.accent, fontWeight = FontWeight.Bold)
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = { chatIconPickerLauncher.launch("image/*") },
+                            colors = ButtonDefaults.buttonColors(containerColor = themeColors.secondary),
+                            modifier = Modifier.weight(1.5f)
+                        ) {
+                            Text("رفع أيقونة PNG/SVG مخصصة 🖼️", fontSize = 9.sp, color = Color.White)
+                        }
+                        
+                        if (chatIconState != "chat_default") {
+                            Button(
+                                onClick = { chatIconState = "chat_default" },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("إعادة للافتراضي 🔄", fontSize = 9.sp, color = Color.White)
+                            }
+                        }
+                    }
+                    
+                    if (chatIconState.startsWith("content://") || chatIconState.startsWith("http")) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically, 
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.2f)).padding(6.dp)
+                        ) {
+                            Image(
+                                painter = rememberAsyncImagePainter(chatIconState),
+                                contentDescription = null,
+                                modifier = Modifier.size(36.dp).clip(RoundedCornerShape(4.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                            Text("تم تحميل أيقونة مخصصة:\n${chatIconState.take(30)}...", fontSize = 9.sp, color = Color.Green, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        Text("الأيقونة النشطة: أيقونة المحادثة الافتراضية العائمة 💬", fontSize = 9.sp, color = themeColors.textSecondary)
+                    }
+
+                    Text("حدد التأثير البصري الحي فوق زر المحادثة:", fontSize = 10.sp, color = themeColors.textPrimary)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        listOf(
+                            "none" to "بدون تأثير",
+                            "pulse" to "نبض حيوي",
+                            "glow" to "توهج نيون",
+                            "rotate" to "دوران هادئ",
+                            "glitch" to "وميض رعاش"
+                        ).forEach { (code, label) ->
+                            val active = chatIconEffectsState == code
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(if (active) themeColors.accent else Color.Black.copy(alpha = 0.2f))
+                                    .clickable { chatIconEffectsState = code }
+                                    .padding(vertical = 6.dp, horizontal = 2.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(label, fontSize = 8.sp, color = if (active) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -3278,8 +3590,12 @@ fun OwnerBackdoorPanelLayout(viewModel: MainViewModel, themeColors: VisualThemeP
                             hiddenFooter = hideFooter,
                             botHidden = robotHidden,
                             botSize = robotSize,
+                            botIcon = botIconState,
+                            botIconEffects = botIconEffectsState,
                             chatHidden = chatHidden,
                             chatSize = chatSize,
+                            chatIcon = chatIconState,
+                            chatIconEffects = chatIconEffectsState,
                             radiusKm = radiusKm,
                             isSpeech = isSpeech,
                             isDataSaver = isDataSaverOn,

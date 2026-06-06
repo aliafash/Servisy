@@ -191,10 +191,13 @@ class AppDatabase private constructor(context: Context) : AppDao {
                     val asHiddenCol = cursor.getColumnIndexOrThrow("assistantHidden")
                     val asSizeCol = cursor.getColumnIndexOrThrow("assistantSize")
                     val asIconCol = cursor.getColumnIndexOrThrow("assistantIcon")
+                    val asIconEffectsCol = cursor.getColumnIndexOrThrow("assistantIconEffects")
                     val asXCol = cursor.getColumnIndexOrThrow("assistantXPercent")
                     val asYCol = cursor.getColumnIndexOrThrow("assistantYPercent")
                     val chatHiddenCol = cursor.getColumnIndexOrThrow("chatHidden")
                     val chatSizeCol = cursor.getColumnIndexOrThrow("chatSize")
+                    val chatIconCol = cursor.getColumnIndexOrThrow("chatIcon")
+                    val chatIconEffectsCol = cursor.getColumnIndexOrThrow("chatIconEffects")
                     val chatXCol = cursor.getColumnIndexOrThrow("chatXPercent")
                     val chatYCol = cursor.getColumnIndexOrThrow("chatYPercent")
                     val fcmCol = cursor.getColumnIndexOrThrow("fcmChannelsJson")
@@ -226,10 +229,13 @@ class AppDatabase private constructor(context: Context) : AppDao {
                         assistantHidden = cursor.getInt(asHiddenCol) == 1,
                         assistantSize = cursor.getInt(asSizeCol),
                         assistantIcon = cursor.getString(asIconCol),
+                        assistantIconEffects = cursor.getString(asIconEffectsCol),
                         assistantXPercent = cursor.getFloat(asXCol),
                         assistantYPercent = cursor.getFloat(asYCol),
                         chatHidden = cursor.getInt(chatHiddenCol) == 1,
                         chatSize = cursor.getInt(chatSizeCol),
+                        chatIcon = cursor.getString(chatIconCol),
+                        chatIconEffects = cursor.getString(chatIconEffectsCol),
                         chatXPercent = cursor.getFloat(chatXCol),
                         chatYPercent = cursor.getFloat(chatYCol),
                         fcmChannelsJson = cursor.getString(fcmCol),
@@ -663,10 +669,13 @@ class AppDatabase private constructor(context: Context) : AppDao {
                 put("assistantHidden", 0)
                 put("assistantSize", 54)
                 put("assistantIcon", "smart_bot")
+                put("assistantIconEffects", "none")
                 put("assistantXPercent", 0.9f)
                 put("assistantYPercent", 0.85f)
                 put("chatHidden", 0)
                 put("chatSize", 54)
+                put("chatIcon", "chat_default")
+                put("chatIconEffects", "none")
                 put("chatXPercent", 0.9f)
                 put("chatYPercent", 0.70f)
                 put("fcmChannelsJson", "join_requests:true,reports:true,memberships:true")
@@ -818,10 +827,13 @@ class AppDatabase private constructor(context: Context) : AppDao {
                 val asHiddenCol = cursor.getColumnIndexOrThrow("assistantHidden")
                 val asSizeCol = cursor.getColumnIndexOrThrow("assistantSize")
                 val asIconCol = cursor.getColumnIndexOrThrow("assistantIcon")
+                val asIconEffectsCol = cursor.getColumnIndexOrThrow("assistantIconEffects")
                 val asXCol = cursor.getColumnIndexOrThrow("assistantXPercent")
                 val asYCol = cursor.getColumnIndexOrThrow("assistantYPercent")
                 val chatHiddenCol = cursor.getColumnIndexOrThrow("chatHidden")
                 val chatSizeCol = cursor.getColumnIndexOrThrow("chatSize")
+                val chatIconCol = cursor.getColumnIndexOrThrow("chatIcon")
+                val chatIconEffectsCol = cursor.getColumnIndexOrThrow("chatIconEffects")
                 val chatXCol = cursor.getColumnIndexOrThrow("chatXPercent")
                 val chatYCol = cursor.getColumnIndexOrThrow("chatYPercent")
                 val fcmCol = cursor.getColumnIndexOrThrow("fcmChannelsJson")
@@ -853,10 +865,13 @@ class AppDatabase private constructor(context: Context) : AppDao {
                     assistantHidden = cursor.getInt(asHiddenCol) == 1,
                     assistantSize = cursor.getInt(asSizeCol),
                     assistantIcon = cursor.getString(asIconCol),
+                    assistantIconEffects = cursor.getString(asIconEffectsCol),
                     assistantXPercent = cursor.getFloat(asXCol),
                     assistantYPercent = cursor.getFloat(asYCol),
                     chatHidden = cursor.getInt(chatHiddenCol) == 1,
                     chatSize = cursor.getInt(chatSizeCol),
+                    chatIcon = cursor.getString(chatIconCol),
+                    chatIconEffects = cursor.getString(chatIconEffectsCol),
                     chatXPercent = cursor.getFloat(chatXCol),
                     chatYPercent = cursor.getFloat(chatYCol),
                     fcmChannelsJson = cursor.getString(fcmCol),
@@ -900,10 +915,13 @@ class AppDatabase private constructor(context: Context) : AppDao {
             put("assistantHidden", if (settings.assistantHidden) 1 else 0)
             put("assistantSize", settings.assistantSize)
             put("assistantIcon", settings.assistantIcon)
+            put("assistantIconEffects", settings.assistantIconEffects)
             put("assistantXPercent", settings.assistantXPercent)
             put("assistantYPercent", settings.assistantYPercent)
             put("chatHidden", if (settings.chatHidden) 1 else 0)
             put("chatSize", settings.chatSize)
+            put("chatIcon", settings.chatIcon)
+            put("chatIconEffects", settings.chatIconEffects)
             put("chatXPercent", settings.chatXPercent)
             put("chatYPercent", settings.chatYPercent)
             put("fcmChannelsJson", settings.fcmChannelsJson)
@@ -1113,7 +1131,7 @@ class AppDatabase private constructor(context: Context) : AppDao {
     }
 
     // --- Private SQLite Database Helper ---
-    private class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "yemen_services_final_optimized.db", null, 2) {
+    private class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "yemen_services_final_optimized.db", null, 3) {
         override fun onCreate(db: SQLiteDatabase) {
             db.execSQL(
                 """
@@ -1176,10 +1194,13 @@ class AppDatabase private constructor(context: Context) : AppDao {
                     assistantHidden INTEGER NOT NULL DEFAULT 0,
                     assistantSize INTEGER NOT NULL DEFAULT 54,
                     assistantIcon TEXT NOT NULL,
+                    assistantIconEffects TEXT NOT NULL DEFAULT 'none',
                     assistantXPercent REAL NOT NULL,
                     assistantYPercent REAL NOT NULL,
                     chatHidden INTEGER NOT NULL DEFAULT 0,
                     chatSize INTEGER NOT NULL DEFAULT 54,
+                    chatIcon TEXT NOT NULL DEFAULT 'chat_default',
+                    chatIconEffects TEXT NOT NULL DEFAULT 'none',
                     chatXPercent REAL NOT NULL,
                     chatYPercent REAL NOT NULL,
                     fcmChannelsJson TEXT NOT NULL,

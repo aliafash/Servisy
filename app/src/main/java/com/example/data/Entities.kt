@@ -135,12 +135,15 @@ data class AdminSettingsEntity(
     val assistantHidden: Boolean = false,
     val assistantSize: Int = 54, // size in dp
     val assistantIcon: String = "smart_bot",
+    val assistantIconEffects: String = "none", // none, pulse, glow, rotate, glitch
     val assistantXPercent: Float = 0.9f,
     val assistantYPercent: Float = 0.85f,
     
     // Chat Floating Icon Controls
     val chatHidden: Boolean = false,
     val chatSize: Int = 54,
+    val chatIcon: String = "chat_default",
+    val chatIconEffects: String = "none", // none, pulse, glow, rotate, glitch
     val chatXPercent: Float = 0.9f,
     val chatYPercent: Float = 0.70f,
     

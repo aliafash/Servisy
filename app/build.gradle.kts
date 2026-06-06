@@ -58,8 +58,8 @@ dependencies {
     // Image loading with Coil
     implementation("io.coil-kt:coil-compose:2.5.0")
 
-    // Networking
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
-    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    // Networking (Unused, commented out to optimize APK size & speed)
+    // implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    // implementation("com.squareup.retrofit2:converter-gson:2.9.0")
 }
