@@ -17,6 +17,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -716,6 +718,14 @@ fun ServicesBrowserLayout(viewModel: MainViewModel, themeColors: VisualThemePale
     var reporterNameInput by remember { mutableStateOf("") }
     var reportContentInput by remember { mutableStateOf("") }
 
+    var showDirectAddForm by remember { mutableStateOf(false) }
+    var quickName by remember { mutableStateOf("") }
+    var quickPhone by remember { mutableStateOf("") }
+    var quickArea by remember { mutableStateOf("") }
+    var quickPrice by remember { mutableStateOf("") }
+    var quickDesc by remember { mutableStateOf("") }
+    var quickCatId by remember { mutableStateOf("plumb") }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -983,6 +993,165 @@ fun ServicesBrowserLayout(viewModel: MainViewModel, themeColors: VisualThemePale
 
         Spacer(modifier = Modifier.height(6.dp))
 
+        val coroutineScope = rememberCoroutineScope()
+
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            colors = CardDefaults.cardColors(containerColor = themeColors.surface),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.dp, themeColors.accent)
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { showDirectAddForm = !showDirectAddForm },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Default.AddBox, contentDescription = null, tint = themeColors.accent)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("🆕 إضافة قائمة خدمة جديدة مباشرة لـ Firestore", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = themeColors.accent)
+                    }
+                    Icon(
+                        imageVector = if (showDirectAddForm) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = null,
+                        tint = themeColors.accent
+                    )
+                }
+
+                if (showDirectAddForm) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    
+                    Text("الاسم بالكامل:", fontSize = 11.sp, color = themeColors.textPrimary)
+                    OutlinedTextField(
+                        value = quickName,
+                        onValueChange = { quickName = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        placeholder = { Text("مثال: الفني عمار السويدي") }
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text("رقم الهاتف الفعال:", fontSize = 11.sp, color = themeColors.textPrimary)
+                    OutlinedTextField(
+                        value = quickPhone,
+                        onValueChange = { quickPhone = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        placeholder = { Text("777111222") }
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("الفئة المختارة:", fontSize = 11.sp, color = themeColors.textPrimary)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.Black.copy(alpha = 0.3f))
+                                    .clickable {
+                                        val idx = categories.indexOfFirst { it.id == quickCatId }
+                                        val nextIdx = if (idx == -1 || idx == categories.size - 1) 0 else idx + 1
+                                        if (categories.isNotEmpty()) {
+                                            quickCatId = categories[nextIdx].id
+                                        }
+                                    }
+                                    .padding(10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    categories.firstOrNull { it.id == quickCatId }?.nameAr ?: quickCatId,
+                                    fontSize = 11.sp,
+                                    color = Color.White
+                                )
+                                Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                            }
+                        }
+                        
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("المنطقة / المدينة:", fontSize = 11.sp, color = themeColors.textPrimary)
+                            OutlinedTextField(
+                                value = quickArea,
+                                onValueChange = { quickArea = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                placeholder = { Text("صنعاء - بيت بوس") }
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text("السعر المبدئي للخدمة (ريال):", fontSize = 11.sp, color = themeColors.textPrimary)
+                    OutlinedTextField(
+                        value = quickPrice,
+                        onValueChange = { quickPrice = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        placeholder = { Text("2500") }
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text("وصف مختصر للخدمة الفنية المقدمة والضمان:", fontSize = 11.sp, color = themeColors.textPrimary)
+                    OutlinedTextField(
+                        value = quickDesc,
+                        onValueChange = { quickDesc = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("جاهز لحل أعطال الكهرباء والتمديد المنزلي الفوري مع ضمان تام للعمل.") }
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Button(
+                        onClick = {
+                            if (quickName.isBlank() || quickPhone.isBlank() || quickArea.isBlank()) {
+                                viewModel.triggerNotification("⚠️ يرجى تعبئة الحقول الإلزامية الأساسية!")
+                            } else {
+                                val priceVal = quickPrice.toDoubleOrNull() ?: 2000.0
+                                val provider = com.example.data.ProviderEntity(
+                                    id = "direct_" + java.util.UUID.randomUUID().toString().take(5),
+                                    name = quickName.trim(),
+                                    phone = quickPhone.trim(),
+                                    categoryId = quickCatId,
+                                    area = quickArea.trim(),
+                                    isAvailable = true,
+                                    ratingSum = 25,
+                                    ratingCount = 5,
+                                    isVip = false,
+                                    basePrice = priceVal,
+                                    isPinned = false,
+                                    isRecommended = true,
+                                    isVerified = true,
+                                    subscriptionStatus = "APPROVED",
+                                    loyaltyPoints = 50,
+                                    latitude = 15.3694 + (Math.random() - 0.5) * 0.05,
+                                    longitude = 44.1910 + (Math.random() - 0.5) * 0.05,
+                                    photoUri = "",
+                                    idCardUri = "",
+                                    supportText = quickDesc.trim()
+                                )
+                                viewModel.insertProviderDirectToFirestore(provider)
+                                viewModel.triggerNotification("✅ تم نشر ومزامنة الخدمة الجديدة بنجاح فوري على Firestore!")
+                                // clear
+                                quickName = ""
+                                quickPhone = ""
+                                quickArea = ""
+                                quickPrice = ""
+                                quickDesc = ""
+                                showDirectAddForm = false
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("نشر الآن ومزامنة الخدمة 🚀", fontWeight = FontWeight.Bold, color = Color.Black)
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
         // E. Dynamic Providers list with VIP pins & Blue Tick badges
         if (filteredProviders.isEmpty()) {
             EmptyStateLayout(themeColors = themeColors)
@@ -1015,6 +1184,9 @@ fun ServicesBrowserLayout(viewModel: MainViewModel, themeColors: VisualThemePale
                         onReportClick = { id, name ->
                             activeReportProviderId = id
                             activeReportProviderName = name
+                        },
+                        onCardClick = {
+                            viewModel.selectProviderForDetail(provider.id)
                         }
                     )
                 }
@@ -1088,6 +1260,132 @@ fun ServicesBrowserLayout(viewModel: MainViewModel, themeColors: VisualThemePale
                     }
                 }
             }
+        }
+    }
+
+    val selectedDetail by viewModel.selectedProviderDetail.collectAsState()
+    if (selectedDetail != null) {
+        val detail = selectedDetail!!
+        Dialog(onDismissRequest = { viewModel.selectProviderForDetail(null) }) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = themeColors.surface),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, themeColors.accent.copy(alpha = 0.5f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AccountBox,
+                        contentDescription = null,
+                        tint = themeColors.accent,
+                        modifier = Modifier.size(72.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = detail.name,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        if (detail.isVerified) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.Default.Verified,
+                                contentDescription = "موثق بالشارة الزرقاء",
+                                tint = Color(0xFF38BDF8),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    if (detail.isVip || detail.subscriptionStatus == "APPROVED") {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(themeColors.accent)
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text("نخبة VIP متميزة ⭐", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                        }
+                    }
+                    
+                    Box(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp).height(1.dp).background(themeColors.secondary.copy(alpha = 0.3f)))
+
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        DetailRow(icon = Icons.Default.Phone, label = "رقم الهاتف / واتساب:", value = detail.phone, themeColors = themeColors)
+                        DetailRow(icon = Icons.Default.Category, label = "التخصص والمهنة الفنية:", value = categories.firstOrNull { it.id == detail.categoryId }?.nameAr ?: detail.categoryId, themeColors = themeColors)
+                        DetailRow(icon = Icons.Default.LocationOn, label = "العنوان والموقع الحالي:", value = detail.area, themeColors = themeColors)
+                        DetailRow(icon = Icons.Default.Payment, label = "سعر الخدمة الأساسي المبدئي:", value = "${detail.basePrice} ريال", themeColors = themeColors)
+                        DetailRow(icon = Icons.Default.Star, label = "التقييم وسجل الجودة:", value = "⭐ " + (if (detail.ratingCount > 0) String.format("%.1f", detail.ratingSum.toDouble() / detail.ratingCount) else "5.0") + " (${detail.ratingCount} تقييمات)", themeColors = themeColors)
+                        DetailRow(icon = Icons.Default.Check, label = "حالة وفرة المهني بالفترة الحالية:", value = if (detail.isAvailable) "🟢 متاح الآن" else "🔴 غير متاح حالياً", themeColors = themeColors)
+                        DetailRow(icon = Icons.Default.Info, label = "بيان السيرة الذاتية المهنية:", value = detail.supportText.ifBlank { "جاهز لتقديم الخدمات المنزلية في كافة مناطق الأمانة بجودة عمل استثنائية." }, themeColors = themeColors)
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${detail.phone}"))
+                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                viewModel.triggerNotification("📞 جاري تحويل الاتصال لـ ${detail.name}...")
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = themeColors.accent),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(imageVector = Icons.Default.Phone, contentDescription = null, tint = Color.Black)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("اتصل الآن", fontWeight = FontWeight.Bold, color = Color.Black)
+                        }
+
+                        OutlinedButton(
+                            onClick = { viewModel.selectProviderForDetail(null) },
+                            border = BorderStroke(1.dp, themeColors.textPrimary),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("إغلاق التفاصيل", color = themeColors.textPrimary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DetailRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String, themeColors: VisualThemePalette) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = themeColors.accent,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = label, fontSize = 10.sp, color = themeColors.textSecondary)
+            Text(text = value, fontSize = 12.sp, color = Color.White)
         }
     }
 }
@@ -1175,12 +1473,14 @@ fun ProviderDisplayCard(
     onRate: (String, Int) -> Unit,
     onToggleAvailability: (ProviderEntity) -> Unit,
     onShare: () -> Unit,
-    onReportClick: (String, String) -> Unit
+    onReportClick: (String, String) -> Unit,
+    onCardClick: () -> Unit = {}
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .testTag("provider_card_${provider.id}"),
+            .testTag("provider_card_${provider.id}")
+            .clickable { onCardClick() },
         colors = CardDefaults.cardColors(containerColor = themeColors.surface),
         shape = RoundedCornerShape(14.dp),
         border = if (provider.isPinned) BorderStroke(1.5.dp, themeColors.accent) else null,

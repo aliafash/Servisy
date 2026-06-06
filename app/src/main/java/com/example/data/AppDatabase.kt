@@ -87,6 +87,33 @@ class AppDatabase private constructor(context: Context) : AppDao {
         }
     }
 
+    private var servicesListener: com.google.firebase.firestore.ListenerRegistration? = null
+
+    override fun updateCategoryFilter(categoryId: String?) {
+        servicesListener?.remove()
+        val query = if (categoryId == null) {
+            firestore.collection("services")
+        } else {
+            firestore.collection("services").whereEqualTo("categoryId", categoryId)
+        }
+        servicesListener = query.addSnapshotListener { snapshots, e ->
+            if (e != null) {
+                Log.e("AppDatabase", "Firestore services listen failed", e)
+                return@addSnapshotListener
+            }
+            if (snapshots != null) {
+                if (snapshots.isEmpty && categoryId == null) {
+                    seedDefaultProvidersToFirestore()
+                } else {
+                    val list = snapshots.documents.mapNotNull { doc ->
+                        doc.data?.toProviderEntity()
+                    }.sortedByDescending { it.isPinned }
+                    _providersFlow.value = list
+                }
+            }
+        }
+    }
+
     private fun setupFirestoreSync() {
         // Real-Time Listener for Firestore categories with Snapshot Listener
         firestore.collection("categories")
@@ -107,24 +134,8 @@ class AppDatabase private constructor(context: Context) : AppDao {
                 }
             }
 
-        // Real-Time Listener for Firestore providers with Snapshot Listener
-        firestore.collection("providers")
-            .addSnapshotListener { snapshots, e ->
-                if (e != null) {
-                    Log.e("AppDatabase", "Firestore providers listen failed", e)
-                    return@addSnapshotListener
-                }
-                if (snapshots != null) {
-                    if (snapshots.isEmpty) {
-                        seedDefaultProvidersToFirestore()
-                    } else {
-                        val list = snapshots.documents.mapNotNull { doc ->
-                            doc.data?.toProviderEntity()
-                        }.sortedByDescending { it.isPinned }
-                        _providersFlow.value = list
-                    }
-                }
-            }
+        // Initially listen to all services in real time
+        updateCategoryFilter(null)
     }
 
     private fun seedDefaultCategoriesToFirestore() {
@@ -156,7 +167,7 @@ class AppDatabase private constructor(context: Context) : AppDao {
             ProviderEntity("p8", "مؤسسة النخبة للتنظيف", "772233445", "clean", "صنعاء - حدة", true, 50, 10, true, 10000.0, false, true, true, "APPROVED", 220, 15.3500, 44.1800)
         )
         for (prov in defaultProviders) {
-            firestore.collection("providers").document(prov.id).set(prov.toMap())
+            firestore.collection("services").document(prov.id).set(prov.toMap())
                 .addOnFailureListener { Log.e("AppDatabase", "Error seeding provider: ${prov.id}", it) }
         }
     }
@@ -825,17 +836,17 @@ class AppDatabase private constructor(context: Context) : AppDao {
     override fun getProvidersFlow(): Flow<List<ProviderEntity>> = _providersFlow.asStateFlow()
 
     override suspend fun insertProvider(provider: ProviderEntity) = withContext(Dispatchers.IO) {
-        firestore.collection("providers").document(provider.id).set(provider.toMap())
+        firestore.collection("services").document(provider.id).set(provider.toMap())
         Unit
     }
 
     override suspend fun deleteProvider(id: String) = withContext(Dispatchers.IO) {
-        firestore.collection("providers").document(id).delete()
+        firestore.collection("services").document(id).delete()
         Unit
     }
 
     override suspend fun rateProvider(id: String, rating: Int) = withContext(Dispatchers.IO) {
-        val docRef = firestore.collection("providers").document(id)
+        val docRef = firestore.collection("services").document(id)
         firestore.runTransaction { transaction ->
             val snapshot = transaction.get(docRef)
             if (snapshot.exists()) {

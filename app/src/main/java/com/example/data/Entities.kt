@@ -175,6 +175,7 @@ interface AppDao {
     suspend fun insertProvider(provider: ProviderEntity)
     suspend fun deleteProvider(id: String)
     suspend fun rateProvider(id: String, rating: Int)
+    fun updateCategoryFilter(categoryId: String?)
 
     fun getSettingsFlow(): Flow<AdminSettingsEntity>
     suspend fun getSettings(): AdminSettingsEntity

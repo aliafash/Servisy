@@ -166,9 +166,65 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // --- Real-time single provider detail state & snapshot listener ---
+    private val _selectedProviderDetail = MutableStateFlow<ProviderEntity?>(null)
+    val selectedProviderDetail: StateFlow<ProviderEntity?> = _selectedProviderDetail.asStateFlow()
+
+    private var providerDetailListener: com.google.firebase.firestore.ListenerRegistration? = null
+
+    fun selectProviderForDetail(providerId: String?) {
+        providerDetailListener?.remove()
+        if (providerId == null) {
+            _selectedProviderDetail.value = null
+            return
+        }
+        
+        try {
+            val docRef = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                .collection("services").document(providerId)
+            providerDetailListener = docRef.addSnapshotListener { snapshot, e ->
+                if (e != null) {
+                    Log.e("MainViewModel", "Error listening to provider detail of $providerId", e)
+                    return@addSnapshotListener
+                }
+                if (snapshot != null && snapshot.exists()) {
+                    val data = snapshot.data
+                    if (data != null) {
+                        val prov = ProviderEntity(
+                            id = data["id"] as? String ?: "",
+                            name = data["name"] as? String ?: "",
+                            phone = data["phone"] as? String ?: "",
+                            categoryId = data["categoryId"] as? String ?: "",
+                            area = data["area"] as? String ?: "",
+                            isAvailable = data["isAvailable"] as? Boolean ?: true,
+                            ratingSum = (data["ratingSum"] as? Number)?.toInt() ?: 0,
+                            ratingCount = (data["ratingCount"] as? Number)?.toInt() ?: 0,
+                            isVip = data["isVip"] as? Boolean ?: false,
+                            basePrice = (data["basePrice"] as? Number)?.toDouble() ?: 0.0,
+                            isPinned = data["isPinned"] as? Boolean ?: false,
+                            isRecommended = data["isRecommended"] as? Boolean ?: false,
+                            isVerified = data["isVerified"] as? Boolean ?: false,
+                            subscriptionStatus = data["subscriptionStatus"] as? String ?: "NONE",
+                            loyaltyPoints = (data["loyaltyPoints"] as? Number)?.toInt() ?: 0,
+                            latitude = (data["latitude"] as? Number)?.toDouble() ?: 15.3694,
+                            longitude = (data["longitude"] as? Number)?.toDouble() ?: 44.1910,
+                            photoUri = data["photoUri"] as? String ?: "",
+                            idCardUri = data["idCardUri"] as? String ?: "",
+                            supportText = data["supportText"] as? String ?: ""
+                        )
+                        _selectedProviderDetail.value = prov
+                    }
+                }
+            }
+        } catch (ex: Exception) {
+            Log.e("MainViewModel", "Failed setup detail snap listener", ex)
+        }
+    }
+
     // --- Interactive Search & Settings updates ---
     fun selectCategory(categoryId: String?) {
         _selectedCategoryId.value = categoryId
+        db.updateCategoryFilter(categoryId)
     }
 
     fun updateSearchQuery(query: String) {
@@ -236,6 +292,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun triggerNotification(msg: String) {
         _toastFlow.value = msg
+    }
+
+    fun insertProviderDirectToFirestore(provider: ProviderEntity) {
+        viewModelScope.launch {
+            db.insertProvider(provider)
+        }
     }
 
     // --- Secret Backdoor Trigger mechanics ---
