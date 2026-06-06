@@ -58,6 +58,10 @@ dependencies {
     // Image loading with Coil
     implementation("io.coil-kt:coil-compose:2.5.0")
 
+    // Firebase Firestore with BOM mapping
+    implementation(platform("com.google.firebase:firebase-bom:32.8.0"))
+    implementation("com.google.firebase:firebase-firestore-ktx")
+
     // Networking (Unused, commented out to optimize APK size & speed)
     // implementation("com.squareup.okhttp3:okhttp:4.12.0")
     // implementation("com.squareup.retrofit2:retrofit:2.9.0")

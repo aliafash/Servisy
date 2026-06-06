@@ -14,6 +14,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+import com.google.firebase.FirebaseApp
+import com.google.firebase.FirebaseOptions
+import com.google.firebase.firestore.FirebaseFirestore
+
+
 class AppDatabase private constructor(context: Context) : AppDao {
     private val dbHelper = DatabaseHelper(context.applicationContext)
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
@@ -32,6 +37,9 @@ class AppDatabase private constructor(context: Context) : AppDao {
     private val _supervisorsFlow = MutableStateFlow<List<SupervisorEntity>>(emptyList())
 
     init {
+        // Initialize real-time Cloud Firestore synchronization list listeners
+        setupFirestoreSync()
+
         // Hydrate initially and pre-populate if empty
         coroutineScope.launch {
             try {
@@ -61,110 +69,178 @@ class AppDatabase private constructor(context: Context) : AppDao {
         refreshSupervisors()
     }
 
-    private fun refreshCategories() {
-        coroutineScope.launch(Dispatchers.IO) {
-            val list = mutableListOf<CategoryEntity>()
-            var db: SQLiteDatabase? = null
-            var cursor: Cursor? = null
-            try {
-                db = dbHelper.readableDatabase
-                cursor = db.rawQuery("SELECT * FROM categories ORDER BY displayOrder ASC, id ASC", null)
-                if (cursor != null && cursor.moveToFirst()) {
-                    val idCol = cursor.getColumnIndexOrThrow("id")
-                    val nameArCol = cursor.getColumnIndexOrThrow("nameAr")
-                    val nameEnCol = cursor.getColumnIndexOrThrow("nameEn")
-                    val iconCol = cursor.getColumnIndexOrThrow("iconName")
-                    val descCol = cursor.getColumnIndexOrThrow("description")
-                    val orderCol = cursor.getColumnIndexOrThrow("displayOrder")
-                    val parentCol = cursor.getColumnIndex("parentId")
-                    do {
-                        val pId = if (parentCol != -1) cursor.getString(parentCol) ?: "" else ""
-                        list.add(
-                            CategoryEntity(
-                                id = cursor.getString(idCol),
-                                nameAr = cursor.getString(nameArCol),
-                                nameEn = cursor.getString(nameEnCol),
-                                iconName = cursor.getString(iconCol),
-                                description = cursor.getString(descCol),
-                                displayOrder = cursor.getInt(orderCol),
-                                parentId = pId
-                            )
-                        )
-                    } while (cursor.moveToNext())
-                }
-            } catch (e: Exception) {
-                Log.e("AppDatabase", "Error loading categories", e)
-            } finally {
-                cursor?.close()
-            }
-            _categoriesFlow.value = list
+    private val appContext = context.applicationContext
+
+    private val firestore: FirebaseFirestore by lazy {
+        try {
+            val app = FirebaseApp.getInstance()
+            FirebaseFirestore.getInstance(app)
+        } catch (e: Exception) {
+            val options = FirebaseOptions.Builder()
+                .setApplicationId("1:658568660162:android:a61a72f574440f54fd275b")
+                .setApiKey("AIzaSyDHSY_vGko5FendFFVqnv5q4MdmnKrLi-g")
+                .setProjectId("wam2026-8d969")
+                .setStorageBucket("wam2026-8d969.firebasestorage.app")
+                .build()
+            val createdApp = FirebaseApp.initializeApp(appContext, options)
+            FirebaseFirestore.getInstance(createdApp)
         }
     }
 
-    private fun refreshProviders() {
-        coroutineScope.launch(Dispatchers.IO) {
-            val list = mutableListOf<ProviderEntity>()
-            var db: SQLiteDatabase? = null
-            var cursor: Cursor? = null
-            try {
-                db = dbHelper.readableDatabase
-                cursor = db.rawQuery("SELECT * FROM providers ORDER BY isPinned DESC, isVip DESC, ratingSum DESC", null)
-                if (cursor != null && cursor.moveToFirst()) {
-                    val idCol = cursor.getColumnIndexOrThrow("id")
-                    val nameCol = cursor.getColumnIndexOrThrow("name")
-                    val phoneCol = cursor.getColumnIndexOrThrow("phone")
-                    val categoryCol = cursor.getColumnIndexOrThrow("categoryId")
-                    val areaCol = cursor.getColumnIndexOrThrow("area")
-                    val availableCol = cursor.getColumnIndexOrThrow("isAvailable")
-                    val ratingSumCol = cursor.getColumnIndexOrThrow("ratingSum")
-                    val ratingCountCol = cursor.getColumnIndexOrThrow("ratingCount")
-                    val vipCol = cursor.getColumnIndexOrThrow("isVip")
-                    val basePriceCol = cursor.getColumnIndexOrThrow("basePrice")
-                    val pinnedCol = cursor.getColumnIndexOrThrow("isPinned")
-                    val recommendedCol = cursor.getColumnIndexOrThrow("isRecommended")
-                    val verifiedCol = cursor.getColumnIndexOrThrow("isVerified")
-                    val subCol = cursor.getColumnIndexOrThrow("subscriptionStatus")
-                    val ptsCol = cursor.getColumnIndexOrThrow("loyaltyPoints")
-                    val latCol = cursor.getColumnIndexOrThrow("latitude")
-                    val lonCol = cursor.getColumnIndexOrThrow("longitude")
-                    val photoCol = cursor.getColumnIndexOrThrow("photoUri")
-                    val idCardCol = cursor.getColumnIndexOrThrow("idCardUri")
-                    val supportCol = cursor.getColumnIndexOrThrow("supportText")
-
-                    do {
-                        list.add(
-                            ProviderEntity(
-                                id = cursor.getString(idCol),
-                                name = cursor.getString(nameCol),
-                                phone = cursor.getString(phoneCol),
-                                categoryId = cursor.getString(categoryCol),
-                                area = cursor.getString(areaCol),
-                                isAvailable = cursor.getInt(availableCol) == 1,
-                                ratingSum = cursor.getInt(ratingSumCol),
-                                ratingCount = cursor.getInt(ratingCountCol),
-                                isVip = cursor.getInt(vipCol) == 1,
-                                basePrice = cursor.getDouble(basePriceCol),
-                                isPinned = cursor.getInt(pinnedCol) == 1,
-                                isRecommended = cursor.getInt(recommendedCol) == 1,
-                                isVerified = cursor.getInt(verifiedCol) == 1,
-                                subscriptionStatus = cursor.getString(subCol),
-                                loyaltyPoints = cursor.getInt(ptsCol),
-                                latitude = cursor.getDouble(latCol),
-                                longitude = cursor.getDouble(lonCol),
-                                photoUri = cursor.getString(photoCol),
-                                idCardUri = cursor.getString(idCardCol),
-                                supportText = cursor.getString(supportCol)
-                            )
-                        )
-                    } while (cursor.moveToNext())
+    private fun setupFirestoreSync() {
+        // Real-Time Listener for Firestore categories with Snapshot Listener
+        firestore.collection("categories")
+            .addSnapshotListener { snapshots, e ->
+                if (e != null) {
+                    Log.e("AppDatabase", "Firestore categories listen failed", e)
+                    return@addSnapshotListener
                 }
-            } catch (e: Exception) {
-                Log.e("AppDatabase", "Error loading providers", e)
-            } finally {
-                cursor?.close()
+                if (snapshots != null) {
+                    if (snapshots.isEmpty) {
+                        seedDefaultCategoriesToFirestore()
+                    } else {
+                        val list = snapshots.documents.mapNotNull { doc ->
+                            doc.data?.toCategoryEntity()
+                        }.sortedBy { it.displayOrder }
+                        _categoriesFlow.value = list
+                    }
+                }
             }
-            _providersFlow.value = list
+
+        // Real-Time Listener for Firestore providers with Snapshot Listener
+        firestore.collection("providers")
+            .addSnapshotListener { snapshots, e ->
+                if (e != null) {
+                    Log.e("AppDatabase", "Firestore providers listen failed", e)
+                    return@addSnapshotListener
+                }
+                if (snapshots != null) {
+                    if (snapshots.isEmpty) {
+                        seedDefaultProvidersToFirestore()
+                    } else {
+                        val list = snapshots.documents.mapNotNull { doc ->
+                            doc.data?.toProviderEntity()
+                        }.sortedByDescending { it.isPinned }
+                        _providersFlow.value = list
+                    }
+                }
+            }
+    }
+
+    private fun seedDefaultCategoriesToFirestore() {
+        Log.d("AppDatabase", "Seeding default categories to Firestore...")
+        val defaultCategories = listOf(
+            CategoryEntity("plumb", "سباكة وصيانة الأنابيب", "Plumbing & Pipe Repair", "plumbing", "إصلاح تسريبات المياه وتمديد الأنابيب المنزلية", 1),
+            CategoryEntity("elec", "كهرباء وتوصيلات منزلية", "Electrical & Wiring", "electrical", "تركيب وتصليح الأفياش، الإضاءة والتحكم في الشبكة", 2),
+            CategoryEntity("ac", "صيانة المكيفات والتبريد", "AC & Refrigeration", "ac_unit", "صيانة أجهزة التكييف والتهوية وإرسال شحنات الفريون", 3),
+            CategoryEntity("carp", "نجارة وأشغال خشبية", "Carpentry & Woodwork", "carpentry", "صيانة الأبواب ومطابخ الألمنيوم والخشب وتركيب الأثاث", 4),
+            CategoryEntity("paint", "دهانات وديكورات", "Painting & Decorating", "paint", "أعمال الطلاء والجبس بورد بجودة عالية ودقة العمل", 5),
+            CategoryEntity("clean", "خدمات التنظيف والتعقيم", "Cleaning & Sanitization", "cleaning", "تنظيف الفلل والبيوت وخزانات المياه بأفضل المواد", 6)
+        )
+        for (cat in defaultCategories) {
+            firestore.collection("categories").document(cat.id).set(cat.toMap())
+                .addOnFailureListener { Log.e("AppDatabase", "Error seeding category: ${cat.id}", it) }
         }
+    }
+
+    private fun seedDefaultProvidersToFirestore() {
+        Log.d("AppDatabase", "Seeding default providers to Firestore...")
+        val defaultProviders = listOf(
+            ProviderEntity("p1", "المهندس ماهر الشرعبي", "771234567", "plumb", "صنعاء - شارع حدة", true, 45, 10, true, 2500.0, true, true, true, "APPROVED", 120, 15.3694, 44.1910),
+            ProviderEntity("p2", "فني السباكة علي عياش", "733445566", "plumb", "عدن - المنصورة", true, 38, 9, false, 2000.0, false, false, false, "APPROVED", 45, 12.8000, 45.0333),
+            ProviderEntity("p3", "الكهربائي محمد القدسي", "711556677", "elec", "صنعاء - الحصبة", true, 48, 10, true, 3000.0, true, true, true, "APPROVED", 90, 15.3720, 44.2000),
+            ProviderEntity("p4", "فني توصيل شبكات خالد", "770112233", "elec", "تعز - شارع جمال", true, 20, 5, false, 1500.0, false, false, false, "APPROVED", 10, 13.5833, 44.0167),
+            ProviderEntity("p5", "أبو رعد لصيانة التكييف", "773738291", "ac", "الحديدة - شارع صنعاء", true, 49, 11, true, 4000.0, false, true, true, "APPROVED", 160, 14.8000, 42.9500),
+            ProviderEntity("p6", "الفني أحمد النجار", "738291029", "carp", "إب - الدائري", true, 32, 8, false, 3000.0, false, false, false, "APPROVED", 30, 13.9667, 44.1833),
+            ProviderEntity("p7", "رائد لأعمال الدهان والطلاء", "774920492", "paint", "صنعاء - الأصبحي", false, 41, 9, true, 5000.0, false, true, true, "APPROVED", 80, 15.3100, 44.2200),
+            ProviderEntity("p8", "مؤسسة النخبة للتنظيف", "772233445", "clean", "صنعاء - حدة", true, 50, 10, true, 10000.0, false, true, true, "APPROVED", 220, 15.3500, 44.1800)
+        )
+        for (prov in defaultProviders) {
+            firestore.collection("providers").document(prov.id).set(prov.toMap())
+                .addOnFailureListener { Log.e("AppDatabase", "Error seeding provider: ${prov.id}", it) }
+        }
+    }
+
+    private fun Map<String, Any>.toCategoryEntity(): CategoryEntity {
+        return CategoryEntity(
+            id = this["id"] as? String ?: "",
+            nameAr = this["nameAr"] as? String ?: "",
+            nameEn = this["nameEn"] as? String ?: "",
+            iconName = this["iconName"] as? String ?: "",
+            description = this["description"] as? String ?: "",
+            displayOrder = (this["displayOrder"] as? Number)?.toInt() ?: 0,
+            parentId = this["parentId"] as? String ?: ""
+        )
+    }
+
+    private fun CategoryEntity.toMap(): Map<String, Any> {
+        return mapOf(
+            "id" to id,
+            "nameAr" to nameAr,
+            "nameEn" to nameEn,
+            "iconName" to iconName,
+            "description" to description,
+            "displayOrder" to displayOrder,
+            "parentId" to parentId
+        )
+    }
+
+    private fun Map<String, Any>.toProviderEntity(): ProviderEntity {
+        return ProviderEntity(
+            id = this["id"] as? String ?: "",
+            name = this["name"] as? String ?: "",
+            phone = this["phone"] as? String ?: "",
+            categoryId = this["categoryId"] as? String ?: "",
+            area = this["area"] as? String ?: "",
+            isAvailable = this["isAvailable"] as? Boolean ?: true,
+            ratingSum = (this["ratingSum"] as? Number)?.toInt() ?: 0,
+            ratingCount = (this["ratingCount"] as? Number)?.toInt() ?: 0,
+            isVip = this["isVip"] as? Boolean ?: false,
+            basePrice = (this["basePrice"] as? Number)?.toDouble() ?: 0.0,
+            isPinned = this["isPinned"] as? Boolean ?: false,
+            isRecommended = this["isRecommended"] as? Boolean ?: false,
+            isVerified = this["isVerified"] as? Boolean ?: false,
+            subscriptionStatus = this["subscriptionStatus"] as? String ?: "NONE",
+            loyaltyPoints = (this["loyaltyPoints"] as? Number)?.toInt() ?: 0,
+            latitude = (this["latitude"] as? Number)?.toDouble() ?: 15.3694,
+            longitude = (this["longitude"] as? Number)?.toDouble() ?: 44.1910,
+            photoUri = this["photoUri"] as? String ?: "",
+            idCardUri = this["idCardUri"] as? String ?: "",
+            supportText = this["supportText"] as? String ?: ""
+        )
+    }
+
+    private fun ProviderEntity.toMap(): Map<String, Any> {
+        return mapOf(
+            "id" to id,
+            "name" to name,
+            "phone" to phone,
+            "categoryId" to categoryId,
+            "area" to area,
+            "isAvailable" to isAvailable,
+            "ratingSum" to ratingSum,
+            "ratingCount" to ratingCount,
+            "isVip" to isVip,
+            "basePrice" to basePrice,
+            "isPinned" to isPinned,
+            "isRecommended" to isRecommended,
+            "isVerified" to isVerified,
+            "subscriptionStatus" to subscriptionStatus,
+            "loyaltyPoints" to loyaltyPoints,
+            "latitude" to latitude,
+            "longitude" to longitude,
+            "photoUri" to photoUri,
+            "idCardUri" to idCardUri,
+            "supportText" to supportText
+        )
+    }
+
+    private fun refreshCategories() {
+        // Handled by Firestore real-time snapshot listeners
+    }
+
+    private fun refreshProviders() {
+        // Handled by Firestore real-time snapshot listeners
     }
 
     private fun refreshSettings() {
@@ -737,69 +813,46 @@ class AppDatabase private constructor(context: Context) : AppDao {
     override fun getCategoriesFlow(): Flow<List<CategoryEntity>> = _categoriesFlow.asStateFlow()
 
     override suspend fun insertCategory(category: CategoryEntity) = withContext(Dispatchers.IO) {
-        val db = dbHelper.writableDatabase
-        val values = ContentValues().apply {
-            put("id", category.id)
-            put("nameAr", category.nameAr)
-            put("nameEn", category.nameEn)
-            put("iconName", category.iconName)
-            put("description", category.description)
-            put("displayOrder", category.displayOrder)
-            put("parentId", category.parentId)
-        }
-        db.insertWithOnConflict("categories", null, values, SQLiteDatabase.CONFLICT_REPLACE)
-        refreshCategories()
+        firestore.collection("categories").document(category.id).set(category.toMap())
+        Unit
     }
 
     override suspend fun deleteCategory(id: String) = withContext(Dispatchers.IO) {
-        val db = dbHelper.writableDatabase
-        db.delete("categories", "id = ?", arrayOf(id))
-        refreshCategories()
+        firestore.collection("categories").document(id).delete()
+        Unit
     }
 
     override fun getProvidersFlow(): Flow<List<ProviderEntity>> = _providersFlow.asStateFlow()
 
     override suspend fun insertProvider(provider: ProviderEntity) = withContext(Dispatchers.IO) {
-        val db = dbHelper.writableDatabase
-        val values = ContentValues().apply {
-            put("id", provider.id)
-            put("name", provider.name)
-            put("phone", provider.phone)
-            put("categoryId", provider.categoryId)
-            put("area", provider.area)
-            put("isAvailable", if (provider.isAvailable) 1 else 0)
-            put("ratingSum", provider.ratingSum)
-            put("ratingCount", provider.ratingCount)
-            put("isVip", if (provider.isVip) 1 else 0)
-            put("basePrice", provider.basePrice)
-            put("isPinned", if (provider.isPinned) 1 else 0)
-            put("isRecommended", if (provider.isRecommended) 1 else 0)
-            put("isVerified", if (provider.isVerified) 1 else 0)
-            put("subscriptionStatus", provider.subscriptionStatus)
-            put("loyaltyPoints", provider.loyaltyPoints)
-            put("latitude", provider.latitude)
-            put("longitude", provider.longitude)
-            put("photoUri", provider.photoUri)
-            put("idCardUri", provider.idCardUri)
-            put("supportText", provider.supportText)
-        }
-        db.insertWithOnConflict("providers", null, values, SQLiteDatabase.CONFLICT_REPLACE)
-        refreshProviders()
+        firestore.collection("providers").document(provider.id).set(provider.toMap())
+        Unit
     }
 
     override suspend fun deleteProvider(id: String) = withContext(Dispatchers.IO) {
-        val db = dbHelper.writableDatabase
-        db.delete("providers", "id = ?", arrayOf(id))
-        refreshProviders()
+        firestore.collection("providers").document(id).delete()
+        Unit
     }
 
     override suspend fun rateProvider(id: String, rating: Int) = withContext(Dispatchers.IO) {
-        val db = dbHelper.writableDatabase
-        db.execSQL(
-            "UPDATE providers SET ratingSum = ratingSum + ?, ratingCount = ratingCount + 1, loyaltyPoints = loyaltyPoints + 20 WHERE id = ?",
-            arrayOf(rating, id)
-        )
-        refreshProviders()
+        val docRef = firestore.collection("providers").document(id)
+        firestore.runTransaction { transaction ->
+            val snapshot = transaction.get(docRef)
+            if (snapshot.exists()) {
+                val currentSum = (snapshot.get("ratingSum") as? Number)?.toInt() ?: 0
+                val currentCount = (snapshot.get("ratingCount") as? Number)?.toInt() ?: 0
+                val currentPoints = (snapshot.get("loyaltyPoints") as? Number)?.toInt() ?: 0
+                
+                transaction.update(docRef, mapOf(
+                    "ratingSum" to currentSum + rating,
+                    "ratingCount" to currentCount + 1,
+                    "loyaltyPoints" to currentPoints + 20
+                ))
+            }
+        }.addOnFailureListener {
+            Log.e("AppDatabase", "Error rating provider in transaction", it)
+        }
+        Unit
     }
 
     override fun getSettingsFlow(): Flow<AdminSettingsEntity> = _settingsFlow.asStateFlow()
