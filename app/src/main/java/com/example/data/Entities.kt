@@ -9,7 +9,8 @@ data class CategoryEntity(
     val nameEn: String,
     val iconName: String, // Icon ID or Name
     val description: String,
-    val displayOrder: Int = 0
+    val displayOrder: Int = 0,
+    val parentId: String = ""
 )
 
 // 2. Service Providers / Professionals
@@ -210,4 +211,22 @@ interface AppDao {
     fun getCitiesFlow(): Flow<List<CityEntity>>
     suspend fun insertCity(city: CityEntity)
     suspend fun deleteCity(id: String)
+
+    // Supervisors
+    fun getSupervisorsFlow(): Flow<List<SupervisorEntity>>
+    suspend fun insertSupervisor(supervisor: SupervisorEntity)
+    suspend fun deleteSupervisor(id: String)
 }
+
+// 11. Custom Supervisors (مشرفين)
+data class SupervisorEntity(
+    val id: String,
+    val username: String,
+    val password: String,
+    val canAcceptRejectRequests: Boolean = true,
+    val canManageCategories: Boolean = false,
+    val canManageBanners: Boolean = false,
+    val canDeleteProviders: Boolean = false,
+    val canViewReports: Boolean = true
+)
+

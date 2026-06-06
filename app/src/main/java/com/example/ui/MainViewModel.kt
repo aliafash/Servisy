@@ -49,6 +49,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val chatMessages: StateFlow<List<ChatMessageEntity>> = db.getAllChatMessagesFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val supervisors: StateFlow<List<SupervisorEntity>> = db.getSupervisorsFlow()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _activeSupervisor = MutableStateFlow<SupervisorEntity?>(null)
+    val activeSupervisor: StateFlow<SupervisorEntity?> = _activeSupervisor.asStateFlow()
+
     // --- Localization Language state ---
     private val _currentLanguage = MutableStateFlow("AR") // AR, EN
     val currentLanguage: StateFlow<String> = _currentLanguage.asStateFlow()
@@ -254,6 +260,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // --- Authentication System ---
+    fun setAdminRole(role: String) {
+        _adminRole.value = role
+    }
+
     fun attemptLogin(idText: String, passText: String, rememberMe: Boolean): Boolean {
         _rememberMeLogin.value = rememberMe
         val cleanUser = idText.trim()
@@ -262,6 +272,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // 1. Check Owner/Master backdoor password
         if (cleanPass == "maher--736462") {
             _adminRole.value = "OWNER"
+            _activeSupervisor.value = null
             navigateTo("OWNER_PANEL")
             triggerNotification("👑 أهلاً يا مالك التطبيق! تم منح كافة صلاحيات التحكم بملفات النظام.")
             logAudit("المالك الرئيسي", "دخول ناجح للبوابة الخلفية")
@@ -275,9 +286,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         if (cleanUser == targetUser && cleanPass == targetPass) {
             _adminRole.value = "ADMIN"
+            _activeSupervisor.value = null
             navigateTo("ADMIN_PANEL")
             triggerNotification("🛡️ دخول ناجح للوحة الإدارة (Admin Panel)")
             logAudit("المدير الرئيسي ${cleanUser}", "تسجيل دخول للوحة الإدارة")
+            return true
+        }
+
+        // 3. Check Custom Supervisors (المشرفين)
+        val matchedSupervisor = supervisors.value.find { it.username == cleanUser && it.password == cleanPass }
+        if (matchedSupervisor != null) {
+            _adminRole.value = "SUPERVISOR"
+            _activeSupervisor.value = matchedSupervisor
+            navigateTo("ADMIN_PANEL")
+            triggerNotification("🛡️ دخول ناجح كمشرف (${cleanUser})")
+            logAudit("المشرف ${cleanUser}", "تسجيل دخول للوحة الإدارة")
             return true
         }
 
@@ -288,6 +311,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun logout() {
         _adminRole.value = "GUEST"
+        _activeSupervisor.value = null
         navigateTo("USER_BROWSE")
         _screenHistory.value = listOf("USER_BROWSE")
         triggerNotification("🔒 تم تسجيل الخروج بنجاح!")
@@ -372,6 +396,46 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             db.saveSettings(newSettings)
             triggerNotification("🔑 تم تعديل بيانات مرور الأدمن بنجاح [ WAM2026 ]")
             logAudit("المالك الرئيسي", "تغيير كلمة مرور المشرف الرئيسي لـ $newUser")
+        }
+    }
+
+    // --- Supervisors Management Actions (Owner / Admin Exclusive) ---
+    fun addSupervisor(username: String, pass: String, canAcceptReject: Boolean, canCat: Boolean, canBan: Boolean, canDel: Boolean, canView: Boolean) {
+        if (username.isBlank() || pass.isBlank()) return
+        viewModelScope.launch {
+            val supervisor = SupervisorEntity(
+                id = java.util.UUID.randomUUID().toString().take(6),
+                username = username.trim(),
+                password = pass.trim(),
+                canAcceptRejectRequests = canAcceptReject,
+                canManageCategories = canCat,
+                canManageBanners = canBan,
+                canDeleteProviders = canDel,
+                canViewReports = canView
+            )
+            db.insertSupervisor(supervisor)
+            triggerNotification("🛡️ تم إضافة المشرف ${username.trim()} بنجاح")
+            logAudit(_adminRole.value, "إضافة مشرف جديد: ${username.trim()}")
+        }
+    }
+
+    fun updateSupervisor(supervisor: SupervisorEntity) {
+        viewModelScope.launch {
+            db.insertSupervisor(supervisor)
+            triggerNotification("🛡️ تم تحديث الصلاحيات/كلمة المرور للمشرف ${supervisor.username}")
+            logAudit(_adminRole.value, "تحديث صلاحيات المشرف: ${supervisor.username}")
+        }
+    }
+
+    fun deleteSupervisor(id: String) {
+        viewModelScope.launch {
+            val currentList = supervisors.value
+            val target = currentList.find { it.id == id }
+            if (target != null) {
+                db.deleteSupervisor(id)
+                triggerNotification("🗑️ تم حذف المشرف ${target.username}")
+                logAudit(_adminRole.value, "حذف حساب المشرف: ${target.username}")
+            }
         }
     }
 
@@ -653,17 +717,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun addNewCategory(nameAr: String, nameEn: String, iconName: String, description: String) {
+    fun addNewCategory(nameAr: String, nameEn: String, iconName: String, description: String, parentId: String = "") {
         if (nameAr.isBlank() || nameEn.isBlank()) {
             triggerNotification("⚠️ يرجى تعبئة الحقول المطلوبة للتصنيف")
             return
         }
         viewModelScope.launch {
             val id = "cat_" + UUID.randomUUID().toString().take(6)
-            val newCat = CategoryEntity(id, nameAr, nameEn, iconName, description, categories.value.size + 1)
+            val newCat = CategoryEntity(id, nameAr, nameEn, iconName, description, categories.value.size + 1, parentId)
             db.insertCategory(newCat)
-            triggerNotification("✅ تم إضافة التصنيف [ $nameAr ]")
-            logAudit(_adminRole.value, "إنشاء تصنيف رئيسي جديد باسم $nameAr")
+            triggerNotification(if (parentId.isEmpty()) "✅ تم إضافة القسم الرئيسي [ $nameAr ]" else "✅ تم إضافة القسم الفرعي [ $nameAr ]")
+            logAudit(_adminRole.value, "إنشاء تصنيف جديد باسم $nameAr")
+        }
+    }
+
+    fun editCategory(id: String, nameAr: String, nameEn: String, iconName: String, description: String, parentId: String = "") {
+        if (nameAr.isBlank() || nameEn.isBlank()) {
+            triggerNotification("⚠️ يرجى تعبئة الحقول المطلوبة")
+            return
+        }
+        viewModelScope.launch {
+            val current = categories.value.find { it.id == id }
+            if (current != null) {
+                val updated = current.copy(
+                    nameAr = nameAr,
+                    nameEn = nameEn,
+                    iconName = iconName,
+                    description = description,
+                    parentId = parentId
+                )
+                db.insertCategory(updated)
+                triggerNotification("✏️ تم تعديل بيانات القسم [ $nameAr ] بنجاح")
+                logAudit(_adminRole.value, "تعديل القسم: $nameAr")
+            }
         }
     }
 

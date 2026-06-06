@@ -29,6 +29,7 @@ class AppDatabase private constructor(context: Context) : AppDao {
     private val _whitelistDevicesFlow = MutableStateFlow<List<DeviceWhitelistEntity>>(emptyList())
     private val _chatMessagesFlow = MutableStateFlow<List<ChatMessageEntity>>(emptyList())
     private val _citiesFlow = MutableStateFlow<List<CityEntity>>(emptyList())
+    private val _supervisorsFlow = MutableStateFlow<List<SupervisorEntity>>(emptyList())
 
     init {
         // Hydrate initially and pre-populate if empty
@@ -57,6 +58,7 @@ class AppDatabase private constructor(context: Context) : AppDao {
         refreshWhitelistDevices()
         refreshChatMessages()
         refreshCities()
+        refreshSupervisors()
     }
 
     private fun refreshCategories() {
@@ -74,7 +76,9 @@ class AppDatabase private constructor(context: Context) : AppDao {
                     val iconCol = cursor.getColumnIndexOrThrow("iconName")
                     val descCol = cursor.getColumnIndexOrThrow("description")
                     val orderCol = cursor.getColumnIndexOrThrow("displayOrder")
+                    val parentCol = cursor.getColumnIndex("parentId")
                     do {
+                        val pId = if (parentCol != -1) cursor.getString(parentCol) ?: "" else ""
                         list.add(
                             CategoryEntity(
                                 id = cursor.getString(idCol),
@@ -82,7 +86,8 @@ class AppDatabase private constructor(context: Context) : AppDao {
                                 nameEn = cursor.getString(nameEnCol),
                                 iconName = cursor.getString(iconCol),
                                 description = cursor.getString(descCol),
-                                displayOrder = cursor.getInt(orderCol)
+                                displayOrder = cursor.getInt(orderCol),
+                                parentId = pId
                             )
                         )
                     } while (cursor.moveToNext())
@@ -522,6 +527,48 @@ class AppDatabase private constructor(context: Context) : AppDao {
         }
     }
 
+    private fun refreshSupervisors() {
+        coroutineScope.launch(Dispatchers.IO) {
+            val list = mutableListOf<SupervisorEntity>()
+            var db: SQLiteDatabase? = null
+            var cursor: Cursor? = null
+            try {
+                db = dbHelper.readableDatabase
+                cursor = db.rawQuery("SELECT * FROM supervisors ORDER BY username ASC", null)
+                if (cursor != null && cursor.moveToFirst()) {
+                    val idCol = cursor.getColumnIndexOrThrow("id")
+                    val userCol = cursor.getColumnIndexOrThrow("username")
+                    val passCol = cursor.getColumnIndexOrThrow("password")
+                    val canAccCol = cursor.getColumnIndexOrThrow("canAcceptRejectRequests")
+                    val canCatCol = cursor.getColumnIndexOrThrow("canManageCategories")
+                    val canBanCol = cursor.getColumnIndexOrThrow("canManageBanners")
+                    val canDelCol = cursor.getColumnIndexOrThrow("canDeleteProviders")
+                    val canViewCol = cursor.getColumnIndexOrThrow("canViewReports")
+
+                    do {
+                        list.add(
+                            SupervisorEntity(
+                                id = cursor.getString(idCol),
+                                username = cursor.getString(userCol),
+                                password = cursor.getString(passCol),
+                                canAcceptRejectRequests = cursor.getInt(canAccCol) == 1,
+                                canManageCategories = cursor.getInt(canCatCol) == 1,
+                                canManageBanners = cursor.getInt(canBanCol) == 1,
+                                canDeleteProviders = cursor.getInt(canDelCol) == 1,
+                                canViewReports = cursor.getInt(canViewCol) == 1
+                            )
+                        )
+                    } while (cursor.moveToNext())
+                }
+            } catch (e: Exception) {
+                Log.e("AppDatabase", "Error loading supervisors", e)
+            } finally {
+                cursor?.close()
+            }
+            _supervisorsFlow.value = list
+        }
+    }
+
     private suspend fun prepopulateIfEmpty() = withContext(Dispatchers.IO) {
         val db = dbHelper.writableDatabase
         var cursor: Cursor? = null
@@ -689,6 +736,7 @@ class AppDatabase private constructor(context: Context) : AppDao {
             put("iconName", category.iconName)
             put("description", category.description)
             put("displayOrder", category.displayOrder)
+            put("parentId", category.parentId)
         }
         db.insertWithOnConflict("categories", null, values, SQLiteDatabase.CONFLICT_REPLACE)
         refreshCategories()
@@ -1039,8 +1087,33 @@ class AppDatabase private constructor(context: Context) : AppDao {
         refreshCities()
     }
 
+    // Supervisors
+    override fun getSupervisorsFlow(): Flow<List<SupervisorEntity>> = _supervisorsFlow.asStateFlow()
+
+    override suspend fun insertSupervisor(supervisor: SupervisorEntity) = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        val values = ContentValues().apply {
+            put("id", supervisor.id)
+            put("username", supervisor.username)
+            put("password", supervisor.password)
+            put("canAcceptRejectRequests", if (supervisor.canAcceptRejectRequests) 1 else 0)
+            put("canManageCategories", if (supervisor.canManageCategories) 1 else 0)
+            put("canManageBanners", if (supervisor.canManageBanners) 1 else 0)
+            put("canDeleteProviders", if (supervisor.canDeleteProviders) 1 else 0)
+            put("canViewReports", if (supervisor.canViewReports) 1 else 0)
+        }
+        db.insertWithOnConflict("supervisors", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        refreshSupervisors()
+    }
+
+    override suspend fun deleteSupervisor(id: String) = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        db.delete("supervisors", "id = ?", arrayOf(id))
+        refreshSupervisors()
+    }
+
     // --- Private SQLite Database Helper ---
-    private class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "yemen_services_final_optimized.db", null, 1) {
+    private class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, "yemen_services_final_optimized.db", null, 2) {
         override fun onCreate(db: SQLiteDatabase) {
             db.execSQL(
                 """
@@ -1050,7 +1123,8 @@ class AppDatabase private constructor(context: Context) : AppDao {
                     nameEn TEXT NOT NULL,
                     iconName TEXT NOT NULL,
                     description TEXT NOT NULL,
-                    displayOrder INTEGER NOT NULL DEFAULT 0
+                    displayOrder INTEGER NOT NULL DEFAULT 0,
+                    parentId TEXT NOT NULL DEFAULT ''
                 )
                 """.trimIndent()
             )
@@ -1217,6 +1291,21 @@ class AppDatabase private constructor(context: Context) : AppDao {
                 )
                 """.trimIndent()
             )
+
+            db.execSQL(
+                """
+                CREATE TABLE supervisors (
+                    id TEXT PRIMARY KEY,
+                    username TEXT UNIQUE,
+                    password TEXT,
+                    canAcceptRejectRequests INTEGER DEFAULT 1,
+                    canManageCategories INTEGER DEFAULT 0,
+                    canManageBanners INTEGER DEFAULT 0,
+                    canDeleteProviders INTEGER DEFAULT 0,
+                    canViewReports INTEGER DEFAULT 1
+                )
+                """.trimIndent()
+            )
         }
 
         override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -1230,6 +1319,7 @@ class AppDatabase private constructor(context: Context) : AppDao {
             db.execSQL("DROP TABLE IF EXISTS whitelist_devices")
             db.execSQL("DROP TABLE IF EXISTS chat_messages")
             db.execSQL("DROP TABLE IF EXISTS cities")
+            db.execSQL("DROP TABLE IF EXISTS supervisors")
             onCreate(db)
         }
     }
