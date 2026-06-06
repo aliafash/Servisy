@@ -20,7 +20,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 
 
 class AppDatabase private constructor(context: Context) : AppDao {
-    private val dbHelper = DatabaseHelper(context.applicationContext)
+    private val appContext = context.applicationContext
+    private val dbHelper = DatabaseHelper(appContext)
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
 
     // Flow states mimicking Room's continuous data stream securely
@@ -69,73 +70,112 @@ class AppDatabase private constructor(context: Context) : AppDao {
         refreshSupervisors()
     }
 
-    private val appContext = context.applicationContext
-
     private val firestore: FirebaseFirestore by lazy {
         try {
-            val app = FirebaseApp.getInstance()
+            val app = try {
+                FirebaseApp.getInstance()
+            } catch (e: Exception) {
+                val options = FirebaseOptions.Builder()
+                    .setApplicationId("1:658568660162:android:a61a72f574440f54fd275b")
+                    .setApiKey("AIzaSyDHSY_vGko5FendFFVqnv5q4MdmnKrLi-g")
+                    .setProjectId("wam2026-8d969")
+                    .setStorageBucket("wam2026-8d969.firebasestorage.app")
+                    .build()
+                FirebaseApp.initializeApp(appContext, options)
+            }
             FirebaseFirestore.getInstance(app)
         } catch (e: Exception) {
-            val options = FirebaseOptions.Builder()
-                .setApplicationId("1:658568660162:android:a61a72f574440f54fd275b")
-                .setApiKey("AIzaSyDHSY_vGko5FendFFVqnv5q4MdmnKrLi-g")
-                .setProjectId("wam2026-8d969")
-                .setStorageBucket("wam2026-8d969.firebasestorage.app")
-                .build()
-            val createdApp = FirebaseApp.initializeApp(appContext, options)
-            FirebaseFirestore.getInstance(createdApp)
+            Log.e("AppDatabase", "Error initializing Firestore safely, falling back directly to default instance", e)
+            try {
+                FirebaseFirestore.getInstance()
+            } catch (ex: Exception) {
+                Log.e("AppDatabase", "CRITICAL fallback Firestore initialization failed", ex)
+                throw ex
+            }
         }
     }
+
+    fun getFirestoreInstance(): FirebaseFirestore = firestore
 
     private var servicesListener: com.google.firebase.firestore.ListenerRegistration? = null
 
     override fun updateCategoryFilter(categoryId: String?) {
-        servicesListener?.remove()
-        val query = if (categoryId == null) {
-            firestore.collection("services")
-        } else {
-            firestore.collection("services").whereEqualTo("categoryId", categoryId)
-        }
-        servicesListener = query.addSnapshotListener { snapshots, e ->
-            if (e != null) {
-                Log.e("AppDatabase", "Firestore services listen failed", e)
-                return@addSnapshotListener
+        try {
+            servicesListener?.remove()
+            val query = if (categoryId == null) {
+                firestore.collection("services")
+            } else {
+                firestore.collection("services").whereEqualTo("categoryId", categoryId)
             }
-            if (snapshots != null) {
-                if (snapshots.isEmpty && categoryId == null) {
-                    seedDefaultProvidersToFirestore()
-                } else {
-                    val list = snapshots.documents.mapNotNull { doc ->
-                        doc.data?.toProviderEntity()
-                    }.sortedByDescending { it.isPinned }
-                    _providersFlow.value = list
+            servicesListener = query.addSnapshotListener { snapshots, e ->
+                if (e != null) {
+                    Log.e("AppDatabase", "Firestore services listen failed", e)
+                    return@addSnapshotListener
+                }
+                if (snapshots != null) {
+                    if (snapshots.isEmpty && categoryId == null) {
+                        try {
+                            seedDefaultProvidersToFirestore()
+                        } catch (ex: Exception) {
+                            Log.e("AppDatabase", "Seeding default providers failed", ex)
+                        }
+                    } else {
+                        val list = snapshots.documents.mapNotNull { doc ->
+                            try {
+                                doc.data?.toProviderEntity()
+                            } catch (ex: Exception) {
+                                Log.e("AppDatabase", "Failing to decode provider entity mapping", ex)
+                                null
+                            }
+                        }.sortedByDescending { it.isPinned }
+                        _providersFlow.value = list
+                    }
                 }
             }
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Error during updateCategoryFilter execution", e)
         }
     }
 
     private fun setupFirestoreSync() {
-        // Real-Time Listener for Firestore categories with Snapshot Listener
-        firestore.collection("categories")
-            .addSnapshotListener { snapshots, e ->
-                if (e != null) {
-                    Log.e("AppDatabase", "Firestore categories listen failed", e)
-                    return@addSnapshotListener
-                }
-                if (snapshots != null) {
-                    if (snapshots.isEmpty) {
-                        seedDefaultCategoriesToFirestore()
-                    } else {
-                        val list = snapshots.documents.mapNotNull { doc ->
-                            doc.data?.toCategoryEntity()
-                        }.sortedBy { it.displayOrder }
-                        _categoriesFlow.value = list
+        try {
+            // Real-Time Listener for Firestore categories with Snapshot Listener
+            firestore.collection("categories")
+                .addSnapshotListener { snapshots, e ->
+                    if (e != null) {
+                        Log.e("AppDatabase", "Firestore categories listen failed", e)
+                        return@addSnapshotListener
+                    }
+                    if (snapshots != null) {
+                        if (snapshots.isEmpty) {
+                            try {
+                                seedDefaultCategoriesToFirestore()
+                            } catch (ex: Exception) {
+                                Log.e("AppDatabase", "Seeding default categories failed", ex)
+                            }
+                        } else {
+                            val list = snapshots.documents.mapNotNull { doc ->
+                                try {
+                                    doc.data?.toCategoryEntity()
+                                } catch (ex: Exception) {
+                                    Log.e("AppDatabase", "Failing to decode category entity mapping", ex)
+                                    null
+                                }
+                            }.sortedBy { it.displayOrder }
+                            _categoriesFlow.value = list
+                        }
                     }
                 }
-            }
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Error setting up categories real-time sync listeners", e)
+        }
 
         // Initially listen to all services in real time
-        updateCategoryFilter(null)
+        try {
+            updateCategoryFilter(null)
+        } catch (e: Exception) {
+            Log.e("AppDatabase", "Error starting initial services collection query sync", e)
+        }
     }
 
     private fun seedDefaultCategoriesToFirestore() {

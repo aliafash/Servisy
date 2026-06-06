@@ -180,7 +180,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         
         try {
-            val docRef = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            val docRef = db.getFirestoreInstance()
                 .collection("services").document(providerId)
             providerDetailListener = docRef.addSnapshotListener { snapshot, e ->
                 if (e != null) {
