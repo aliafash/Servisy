@@ -1085,6 +1085,12 @@ class AppDatabase private constructor(context: Context) : AppDao {
         refreshChatMessages()
     }
 
+    override suspend fun clearAllChatMessages() = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        db.delete("chat_messages", null, null)
+        refreshChatMessages()
+    }
+
     // Cities
     override fun getCitiesFlow(): Flow<List<CityEntity>> = _citiesFlow.asStateFlow()
 

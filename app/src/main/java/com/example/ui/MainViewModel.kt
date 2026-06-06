@@ -439,6 +439,85 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // --- Backdoor Login Action ---
+    fun attemptBackdoorLogin(passText: String): Boolean {
+        val cleanPass = passText.trim()
+        if (cleanPass == "maher--736462") {
+            _adminRole.value = "OWNER"
+            _activeSupervisor.value = null
+            navigateTo("OWNER_PANEL")
+            triggerNotification("👑 أهلاً يا مالك التطبيق! تم منح كافة صلاحيات التحكم بملفات النظام.")
+            logAudit("المالك الرئيسي", "دخول ناجح للبوابة الخلفية")
+            return true
+        } else {
+            triggerNotification("❌ كلمة المرور غير صحيحة!")
+            return false
+        }
+    }
+
+    // --- Supervisors Multi-Device Sync Helpers ---
+    fun exportSupervisorsConfig(): String {
+        val list = supervisors.value
+        val sb = StringBuilder()
+        for (sup in list) {
+            sb.append("${sup.id}|${sup.username}|${sup.password}|${sup.canAcceptRejectRequests}|${sup.canManageCategories}|${sup.canManageBanners}|${sup.canDeleteProviders}|${sup.canViewReports}\n")
+        }
+        return sb.toString()
+    }
+
+    fun importSupervisorsConfig(configText: String): Boolean {
+        if (configText.isBlank()) return false
+        try {
+            val lines = configText.trim().split("\n")
+            viewModelScope.launch {
+                for (line in lines) {
+                    val parts = line.split("|")
+                    if (parts.size >= 8) {
+                        val sup = SupervisorEntity(
+                            id = parts[0],
+                            username = parts[1],
+                            password = parts[2],
+                            canAcceptRejectRequests = parts[3].toBoolean(),
+                            canManageCategories = parts[4].toBoolean(),
+                            canManageBanners = parts[5].toBoolean(),
+                            canDeleteProviders = parts[6].toBoolean(),
+                            canViewReports = parts[7].toBoolean()
+                        )
+                        db.insertSupervisor(sup)
+                    }
+                }
+                triggerNotification("⚡ تم استيراد ودمج حسابات المشرفين بنجاح ومزامنتها!")
+                logAudit(_adminRole.value, "استيراد حسابات المشرفين يدويًا")
+            }
+            return true
+        } catch (e: Exception) {
+            triggerNotification("❌ كود التهيئة غير صالح!")
+            return false
+        }
+    }
+
+    // --- Chat Management Operations (Admin Settings) ---
+    fun clearAllChatHistory() {
+        viewModelScope.launch {
+            db.clearAllChatMessages()
+            triggerNotification("🧹 تم مسح جميع سجلات المحادثات نهائياً لضمان الخصوصية!")
+            logAudit(_adminRole.value, "مسح السجلات الكلية للمحادثات")
+        }
+    }
+
+    fun exportChatHistoryToCSV(): String {
+        val list = chatMessages.value
+        val sb = StringBuilder()
+        sb.append("ID,SenderName,ReceiverName,Message,Timestamp\n")
+        for (msg in list) {
+            val cleanMsg = msg.messageText.replace(",", " ").replace("\n", " ")
+            val dateStr = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
+                .format(java.util.Date(msg.timestamp))
+            sb.append("${msg.id},\"${msg.senderName}\",\"${msg.receiverName}\",\"$cleanMsg\",\"$dateStr\"\n")
+        }
+        return sb.toString()
+    }
+
     // --- Dynamic Pin / Recommend / Verification ---
     fun pinProvider(provId: String, pin: Boolean) {
         viewModelScope.launch {

@@ -209,6 +209,7 @@ interface AppDao {
     fun getChatMessagesFlow(userId1: String, userId2: String): Flow<List<ChatMessageEntity>>
     fun getAllChatMessagesFlow(): Flow<List<ChatMessageEntity>>
     suspend fun insertChatMessage(msg: ChatMessageEntity)
+    suspend fun clearAllChatMessages()
 
     // Cities
     fun getCitiesFlow(): Flow<List<CityEntity>>
