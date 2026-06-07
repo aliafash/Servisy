@@ -176,7 +176,14 @@ data class AppSettings(
     val assistantIconEffect: String = "none",
     val chatIconEffect: String = "none",
     val isAutoCleanupActive: Boolean = false,
-    val autoCleanupPeriodDays: Int = 30
+    val autoCleanupPeriodDays: Int = 30,
+    val isVoiceSearchEnabled: Boolean = true,
+    val registrationTerms: List<String> = listOf(
+        "توفير الاسم الثلاثي الكامل ومطابق للبطاقة الشخصية",
+        "رقم الهاتف يجب أن يكون فعالاً ومتصلاً بواتساب لتسهيل التواصل",
+        "تحديد موقع ممارسة الخدمة بشكل دقيق لربط محددات البحث",
+        "الالتزام التام بالأسعار المحددة وتجنب الشكاوى لضمان استمرارية الحساب"
+    )
 )
 
 data class Supervisor(
@@ -229,6 +236,16 @@ class MainViewModel : ViewModel() {
     // Current Login
     var loggedInUser = MutableStateFlow("") // "admin", "supervisor", "visitor", "user_X"
     var loggedInUsername = MutableStateFlow("")
+    val voiceSearchResult = MutableStateFlow("")
+    val supervisorPermissions = MutableStateFlow<List<String>>(emptyList())
+
+    fun hasPermission(perm: String): Boolean {
+        if (loggedInUser.value == "admin") return true
+        if (loggedInUser.value == "supervisor") {
+            return supervisorPermissions.value.contains(perm)
+        }
+        return false
+    }
 
     val activeScreen = MutableStateFlow("HOME") // HOME, LOGIN, REGISTER, INFO, ADMIN, CHAT_LIST, CHAT_ROOM, PROV_DETAILS, BACKDOOR
     val isArabic = MutableStateFlow(true)
@@ -365,21 +382,21 @@ class MainViewModel : ViewModel() {
             }
         })
 
-        registerListener("chats", db.collection("chats").orderBy("lastUpdated", Query.Direction.DESCENDING).addSnapshotListener { snapshot, e ->
+        registerListener("chats", db.collection("chats").addSnapshotListener { snapshot, e ->
             if (e == null && snapshot != null) {
-                _chats.value = snapshot.toObjects(Chat::class.java)
+                _chats.value = snapshot.toObjects(Chat::class.java).sortedByDescending { it.lastUpdated }
             }
         })
 
-        registerListener("reports", db.collection("reports").orderBy("timestamp", Query.Direction.DESCENDING).addSnapshotListener { snapshot, e ->
+        registerListener("reports", db.collection("reports").addSnapshotListener { snapshot, e ->
             if (e == null && snapshot != null) {
-                _reports.value = snapshot.toObjects(Report::class.java)
+                _reports.value = snapshot.toObjects(Report::class.java).sortedByDescending { it.timestamp }
             }
         })
 
-        registerListener("audit_logs", db.collection("audit_logs").orderBy("timestamp", Query.Direction.DESCENDING).addSnapshotListener { snapshot, e ->
+        registerListener("audit_logs", db.collection("audit_logs").addSnapshotListener { snapshot, e ->
             if (e == null && snapshot != null) {
-                _auditLogs.value = snapshot.toObjects(AuditLog::class.java)
+                _auditLogs.value = snapshot.toObjects(AuditLog::class.java).sortedByDescending { it.timestamp }
             }
         })
 
@@ -793,6 +810,53 @@ class MainViewModel : ViewModel() {
         }
     }
 
+    fun createSupervisor(s: Supervisor, adminName: String) {
+        viewModelScope.launch {
+            val id = if (s.id.isBlank()) UUID.randomUUID().toString() else s.id
+            db.collection("supervisors").document(id).set(s.copy(id = id)).await()
+            logAudit(adminName, "إنشاء حساب مشرف جديد: ${s.username} بصلاحيات محددة")
+        }
+    }
+
+    fun deleteSupervisor(id: String, adminName: String) {
+        viewModelScope.launch {
+            db.collection("supervisors").document(id).delete().await()
+            logAudit(adminName, "حذف حساب مشرف برقم: $id")
+        }
+    }
+
+    fun deleteProvider(id: String, adminName: String) {
+        viewModelScope.launch {
+            db.collection("service_providers").document(id).delete().await()
+            logAudit(adminName, "حذف فني أو مقدم خدمة من الدليل: $id")
+        }
+    }
+
+    fun updateProviderManual(p: Provider, adminName: String) {
+        viewModelScope.launch {
+            db.collection("service_providers").document(p.id).set(p).await()
+            logAudit(adminName, "تعديل يدوي لبيانات مقدم الخدمة: ${p.name}")
+        }
+    }
+
+    fun clearAllChatsAndMessages(adminName: String) {
+        viewModelScope.launch {
+            try {
+                val chats = db.collection("chats").get().await()
+                for (c in chats.documents) {
+                    c.reference.delete()
+                }
+                val msgs = db.collection("messages").get().await()
+                for (m in msgs.documents) {
+                    m.reference.delete()
+                }
+                logAudit(adminName, "مسح وتفريغ السجلات والدفاتر نهائياً وللأبد لضمان خصوصية المحادثات")
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     private fun logAudit(adminName: String, actionStr: String) {
         val id = UUID.randomUUID().toString()
         val log = AuditLog(id, adminName, actionStr, System.currentTimeMillis())
@@ -937,6 +1001,7 @@ class MainActivity : ComponentActivity() {
                     if (!matches.isNullOrEmpty()) {
                         val speechText = matches[0]
                         Toast.makeText(this@MainActivity, "البحث عن: $speechText", Toast.LENGTH_LONG).show()
+                        vm.voiceSearchResult.value = speechText
                     }
                 }
 
@@ -1576,11 +1641,20 @@ fun HomeScreen(vm: MainViewModel, palette: ColorSchemePalette, onSpeechClick: ()
     val settings by vm.settings.collectAsStateWithLifecycle()
 
     val isArabic by vm.isArabic.collectAsStateWithLifecycle()
+    val currentUserState by vm.loggedInUser.collectAsStateWithLifecycle()
+    val voiceSearchText by vm.voiceSearchResult.collectAsStateWithLifecycle()
 
     var activeCatId by remember { mutableStateOf("") }
     var searchQuery by remember { mutableStateOf("") }
     var selectedCityId by remember { mutableStateOf("") }
-    var radiusValue by remember { mutableFloatStateOf(10f) }
+    var radiusValue by remember { mutableFloatStateOf(15f) }
+
+    LaunchedEffect(voiceSearchText) {
+        if (voiceSearchText.isNotBlank()) {
+            searchQuery = voiceSearchText
+            vm.voiceSearchResult.value = ""
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -1742,9 +1816,33 @@ fun HomeScreen(vm: MainViewModel, palette: ColorSchemePalette, onSpeechClick: ()
                             unfocusedTextColor = Color.White
                         )
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    IconButton(onClick = onSpeechClick) {
-                        Icon(Icons.Default.Mic, contentDescription = "Voice Search", tint = palette.primary)
+                    if (settings.isVoiceSearchEnabled) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        IconButton(onClick = onSpeechClick) {
+                            Icon(Icons.Default.Mic, contentDescription = "Voice Search", tint = palette.primary)
+                        }
+                    }
+                }
+
+                // In-App Notification when instant chat is disabled/blocked for current role
+                val blockVisitor = settings.isChatDisabledForVisitors && (currentUserState.isBlank() || currentUserState == "visitor")
+                val blockProvider = settings.isChatDisabledForProviders && (providers.any { it.deviceId == currentUserState })
+                if (blockVisitor || blockProvider) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF421515)),
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                    ) {
+                        Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Warning, contentDescription = "Warning", tint = Color.Red, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = settings.disabledChatNotificationMessage,
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                lineHeight = 14.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                     }
                 }
 
@@ -2103,13 +2201,24 @@ fun LoginScreen(vm: MainViewModel, palette: ColorSchemePalette, isArabic: Boolea
             colors = ButtonDefaults.buttonColors(containerColor = palette.primary),
             modifier = Modifier.fillMaxWidth(),
             onClick = {
+                val dynamicSuper = vm.supervisors.value.find { it.username == username && it.password == password }
                 if (username == "WAM2026" && password == settings.adminPassword) {
                     vm.loggedInUser.value = "admin"
                     vm.loggedInUsername.value = "الأدمن الرئيسي"
+                    vm.supervisorPermissions.value = emptyList()
                     vm.activeScreen.value = "ADMIN"
                 } else if (username == "supervisor" && password == "maher123") {
                     vm.loggedInUser.value = "supervisor"
                     vm.loggedInUsername.value = "المشرف العام"
+                    vm.supervisorPermissions.value = listOf(
+                        "approve_reject_requests", "manage_categories_cities", "manage_ads_banners",
+                        "delete_active_providers", "manage_providers", "view_reports_audits", "view_chat_history"
+                    )
+                    vm.activeScreen.value = "ADMIN"
+                } else if (dynamicSuper != null) {
+                    vm.loggedInUser.value = "supervisor"
+                    vm.loggedInUsername.value = dynamicSuper.username
+                    vm.supervisorPermissions.value = dynamicSuper.permissions
                     vm.activeScreen.value = "ADMIN"
                 } else {
                     errorMsg = if (isArabic) "البيانات المدخلة غير صحيحة!" else "Incorrect credentials entered!"
@@ -2378,9 +2487,46 @@ fun RegistrationForm(vm: MainViewModel, palette: ColorSchemePalette, isArabic: B
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+        val settings by vm.settings.collectAsStateWithLifecycle()
+        Text(
+            text = if (isArabic) "📜 شروط تسجيل الكوادر والمهنيين:" else "📜 Terms of Professional Registration:",
+            color = palette.primary,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 10.dp)
+        )
+        Card(
+            colors = CardDefaults.cardColors(containerColor = palette.surface.copy(alpha = 0.5f)),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+        ) {
+            Column(modifier = Modifier.padding(8.dp)) {
+                val terms = settings.registrationTerms.ifEmpty {
+                    listOf(
+                        "توفير الاسم الثلاثي الكامل ومطابق للبطاقة الشخصية",
+                        "رقم الهاتف يجب أن يكون فعالاً ومتصلاً بواتساب لتسهيل التواصل",
+                        "تحديد موقع ممارسة الخدمة بشكل دقيق لربط محددات البحث",
+                        "الالتزام بقيم وأخلاقيات العمل والأمانة عند تقديم الخدمة للجمهور"
+                    )
+                }
+                terms.forEach { term ->
+                    Row(modifier = Modifier.padding(vertical = 2.dp)) {
+                        Text("• ", color = palette.primary, fontSize = 11.sp)
+                        Text(term, color = Color.White, fontSize = 11.sp, lineHeight = 14.sp)
+                    }
+                }
+            }
+        }
+        var acceptTerms by remember { mutableStateOf(false) }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+            Checkbox(checked = acceptTerms, onCheckedChange = { acceptTerms = it })
+            Text(if (isArabic) "أوافق على جميع الشروط والأحكام المذكورة أعلاه" else "I agree to all terms & conditions", color = Color.White, fontSize = 11.sp)
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
         Button(
-            colors = ButtonDefaults.buttonColors(containerColor = palette.primary),
+            colors = ButtonDefaults.buttonColors(containerColor = if (acceptTerms) palette.primary else Color.Gray),
             modifier = Modifier.fillMaxWidth(),
+            enabled = acceptTerms,
             onClick = {
                 if (name.isBlank() || phone.isBlank() || address.isBlank() || area.isBlank()) {
                     return@Button
@@ -2401,14 +2547,28 @@ fun RegistrationForm(vm: MainViewModel, palette: ColorSchemePalette, isArabic: B
                 vm.activeScreen.value = "HOME"
             }
         ) {
-            Text(if (isArabic) "تقديم طلب الانضمام للمراجعة الفورية" else "Submit Joint Application", color = palette.secondaryColor)
+            Text(if (isArabic) "تقديم طلب الانضمام للمراجعة الفورية" else "Submit Joint Application", color = if (acceptTerms) palette.secondaryColor else Color.White)
         }
     }
 }
 
 fun compressAndEncodeBitmap(bitmap: Bitmap): String {
+    val maxDimension = 600
+    val originalWidth = bitmap.width
+    val originalHeight = bitmap.height
+    val scaledBitmap = if (originalWidth > maxDimension || originalHeight > maxDimension) {
+        val aspectRatio = originalWidth.toFloat() / originalHeight.toFloat()
+        val (newWidth, newHeight) = if (originalWidth > originalHeight) {
+            Pair(maxDimension, (maxDimension / aspectRatio).toInt())
+        } else {
+            Pair((maxDimension * aspectRatio).toInt(), maxDimension)
+        }
+        Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
+    } else {
+        bitmap
+    }
     val outputStream = ByteArrayOutputStream()
-    bitmap.compress(Bitmap.CompressFormat.JPEG, 75, outputStream)
+    scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 70, outputStream)
     val byteArray = outputStream.toByteArray()
     return android.util.Base64.encodeToString(byteArray, android.util.Base64.DEFAULT)
 }
@@ -2637,6 +2797,8 @@ fun AdminDashboard(vm: MainViewModel, palette: ColorSchemePalette, isArabic: Boo
     val approved by vm.providers.collectAsStateWithLifecycle()
     val audits by vm.auditLogs.collectAsStateWithLifecycle()
     val complaints by vm.reports.collectAsStateWithLifecycle()
+    val messages by vm.chatMessages.collectAsStateWithLifecycle()
+    val chats by vm.chats.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
 
     var activeTab by remember { mutableIntStateOf(0) }
@@ -2652,7 +2814,7 @@ fun AdminDashboard(vm: MainViewModel, palette: ColorSchemePalette, isArabic: Boo
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = if (isArabic) "⚙️ لوحة تحكم الإدارة الشاملة" else "⚙️ Core Admin Panel",
+                text = if (isArabic) "⚙️ لوحة تحكم الإدارة والرقابة الشاملة" else "⚙️ Core Admin Panel",
                 color = palette.primary,
                 fontWeight = FontWeight.Bold,
                 fontSize = 15.sp
@@ -2668,7 +2830,7 @@ fun AdminDashboard(vm: MainViewModel, palette: ColorSchemePalette, isArabic: Boo
             }
         }
 
-        // Horizontal tabs slider
+        // Horizontal scrollable tabs slider
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2676,29 +2838,61 @@ fun AdminDashboard(vm: MainViewModel, palette: ColorSchemePalette, isArabic: Boo
                 .padding(vertical = 6.dp)
         ) {
             val names = if (isArabic) {
-                listOf("طلبات الكوادر (${pending.size})", "مديري الخدمات (${approved.size})", "إعلانات لافتة", "هوية وألوان", "السجلات الإحصائية (${audits.size})")
+                listOf(
+                    "طلبات التسجيل (${pending.size})",
+                    "إضافة/تعديل فني يدوياً",
+                    "إعلانات وبنرات",
+                    "إدارة الأقسام والمدن",
+                    "الإبلاغات والتقارير (${complaints.size})",
+                    "إدارة السجلات والخصوصية",
+                    "المزودين النشطين",
+                    "لوحة التحكم بالاشتراكات",
+                    "إدارة المشرفين",
+                    "تغيير الألوان والشروط"
+                )
             } else {
-                listOf("Requests", "Approved", "Banners", "Colors", "Audits")
+                listOf(
+                    "Join Requests (${pending.size})",
+                    "Manual Add/Edit",
+                    "Banners & Ads",
+                    "Categories & Cities",
+                    "Complaints (${complaints.size})",
+                    "Privacy & Deletes",
+                    "Active Directory",
+                    "Subscriptions",
+                    "Supervisors",
+                    "Theme & Guidelines"
+                )
             }
 
             names.forEachIndexed { idx, name ->
-                val active = activeTab == idx
+                val active = (activeTab == idx)
                 Button(
                     onClick = { activeTab = idx },
                     colors = ButtonDefaults.buttonColors(containerColor = if (active) palette.primary else palette.surface),
-                    modifier = Modifier.padding(end = 4.dp)
+                    modifier = Modifier.padding(end = 4.dp).height(36.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
-                    Text(name, color = if (active) palette.secondaryColor else Color.White, fontSize = 11.sp)
+                    Text(name, color = if (active) palette.secondaryColor else Color.White, fontSize = 10.sp)
                 }
             }
         }
 
-        when (activeTab) {
-            0 -> TabPendingRequests(vm, pending, palette, isArabic)
-            1 -> TabApprovedProviders(vm, approved, palette, isArabic)
-            2 -> TabBannersAds(vm, palette, isArabic)
-            3 -> TabThemeColorsSettings(vm, settings, palette, isArabic)
-            4 -> TabAuditLogsSection(vm, audits, complaints, palette, isArabic)
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Box(modifier = Modifier.weight(1f)) {
+            when (activeTab) {
+                0 -> TabPendingRequests(vm, pending, palette, isArabic)
+                1 -> TabManualTechnician(vm, approved, palette, isArabic)
+                2 -> TabBannersAds(vm, palette, isArabic)
+                3 -> TabCategoriesAndCities(vm, palette, isArabic)
+                4 -> TabReportsAndComplaints(vm, complaints, audits, palette, isArabic)
+                5 -> TabChatHistoryPrivacy(vm, chats, messages, palette, isArabic)
+                6 -> TabActiveProviders(vm, approved, palette, isArabic)
+                7 -> TabSubscriptionsPinning(vm, approved, palette, isArabic)
+                8 -> TabAdminManagement(vm, palette, isArabic)
+                9 -> TabThemeColorsSettings(vm, settings, palette, isArabic)
+            }
         }
     }
 }
@@ -2861,6 +3055,7 @@ fun TabBannersAds(vm: MainViewModel, palette: ColorSchemePalette, isArabic: Bool
 @Composable
 fun TabThemeColorsSettings(vm: MainViewModel, settings: AppSettings, palette: ColorSchemePalette, isArabic: Boolean) {
     val context = LocalContext.current
+    var newRegistrationTermInput by remember { mutableStateOf("") }
     var appName by remember { mutableStateOf(settings.appNameAr) }
     var welcomeMsg by remember { mutableStateOf(settings.welcomeMessage) }
     var footerText by remember { mutableStateOf(settings.footerText) }
@@ -3082,6 +3277,86 @@ fun TabThemeColorsSettings(vm: MainViewModel, settings: AppSettings, palette: Co
             }
         }
 
+        // --- SECTION 4: REGISTRATION REGULATION TERMS & GUIDELINES ---
+        Card(
+            colors = CardDefaults.cardColors(containerColor = palette.surface),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+        ) {
+            Column(modifier = Modifier.padding(10.dp)) {
+                Text(
+                    text = if (isArabic) "📜 شروط تسجيل الكوادر والمهنيين المعتمدة" else "📜 Registration Regulation Guidelines",
+                    color = palette.primary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                val currentTerms = settings.registrationTerms
+                if (currentTerms.isEmpty()) {
+                    Text(
+                        text = if (isArabic) "لم يتم العثور على شروط تسجيل مخصصة. جاري إظهار قوانين الدليل الافتراضية." else "No custom registration rules configured yet. Showing system defaults.",
+                        color = Color.Gray,
+                        fontSize = 11.sp
+                    )
+                } else {
+                    currentTerms.forEachIndexed { idx, term ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "${idx + 1}. $term",
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                modifier = Modifier.weight(1f),
+                                lineHeight = 13.sp
+                            )
+                            IconButton(
+                                onClick = {
+                                    val updated = currentTerms.toMutableList().apply { removeAt(idx) }
+                                    val bundle = settings.copy(registrationTerms = updated)
+                                    vm.saveAppSettings(bundle, "الأدمن")
+                                    Toast.makeText(context, "تمت إزالة قانون التسجيل بنجاح", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = "Delete term", tint = Color.Red, modifier = Modifier.size(16.dp))
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    TextField(
+                        value = newRegistrationTermInput,
+                        onValueChange = { newRegistrationTermInput = it },
+                        label = { Text(if (isArabic) "اكتب شرطاً أو قانوناً جديداً..." else "Enter new registration rule...") },
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Button(
+                        colors = ButtonDefaults.buttonColors(containerColor = palette.primary),
+                        onClick = {
+                            if (newRegistrationTermInput.isNotBlank()) {
+                                val updated = currentTerms.toMutableList().apply { add(newRegistrationTermInput) }
+                                val bundle = settings.copy(registrationTerms = updated)
+                                vm.saveAppSettings(bundle, "الأدمن")
+                                newRegistrationTermInput = ""
+                                Toast.makeText(context, "تمت إضافة وحقن قانون التسجيل بنجاح في قواعد البيانات", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.height(52.dp)
+                    ) {
+                        Text(if (isArabic) "إدراج" else "Add", color = palette.secondaryColor)
+                    }
+                }
+            }
+        }
+
         // --- SUBMIT ALL ---
         Spacer(modifier = Modifier.height(14.dp))
         Button(
@@ -3167,6 +3442,796 @@ fun TabAuditLogsSection(vm: MainViewModel, audits: List<AuditLog>, complaints: L
                         fontSize = 12.sp,
                         modifier = Modifier.padding(8.dp)
                     )
+                }
+            }
+        }
+    }
+}
+
+// 2. Tab Manual Technician Adding Section
+@Composable
+fun TabManualTechnician(vm: MainViewModel, approved: List<Provider>, palette: ColorSchemePalette, isArabic: Boolean) {
+    val context = LocalContext.current
+    if (!vm.hasPermission("manage_providers")) {
+        Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+            Text(if (isArabic) "🚫 عذراً! ليس لديك الصلاحية لإضافة أو تعديل شؤون المهنيين يدوياً." else "🚫 Access Denied! You do not have permissions to manage service providers.", color = Color.Red, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        }
+        return
+    }
+
+    var editMode by remember { mutableStateOf(false) }
+    var targetProviderId by remember { mutableStateOf("") }
+
+    var name by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf("") }
+    var address by remember { mutableStateOf("") }
+    var area by remember { mutableStateOf("") }
+    var mainCategoryIndex by remember { mutableIntStateOf(0) }
+    var previewPrice by remember { mutableStateOf("") }
+    var inspectionPrice by remember { mutableStateOf("") }
+    var hasVipBadge by remember { mutableStateOf(false) }
+    var isFem by remember { mutableStateOf(false) }
+
+    val categories by vm.categories.collectAsStateWithLifecycle()
+    val roots = categories.filter { it.parentId.isBlank() }
+
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Text(
+            text = if (editMode) "📝 تعديل الكادر المهني المعتمد:" else "✍️ تفاصيل إضافة كادر فني جديد يدوياً تجاوزاً للموافقات:",
+            color = palette.primary,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+
+        TextField(value = name, onValueChange = { name = it }, label = { Text(if (isArabic) "اسم مقدم الخدمة" else "Provider Full Name") }, modifier = Modifier.fillMaxWidth())
+        Spacer(modifier = Modifier.height(4.dp))
+        TextField(value = phone, onValueChange = { phone = it }, label = { Text(if (isArabic) "رقم الهاتف الفعال" else "Phone Number") }, modifier = Modifier.fillMaxWidth())
+        Spacer(modifier = Modifier.height(4.dp))
+        TextField(value = address, onValueChange = { address = it }, label = { Text(if (isArabic) "المدينة/المحافظة وسكنه" else "Area Address details") }, modifier = Modifier.fillMaxWidth())
+        Spacer(modifier = Modifier.height(4.dp))
+        TextField(value = area, onValueChange = { area = it }, label = { Text(if (isArabic) "الحي السكني أو الشارع" else "Block Neighborhood") }, modifier = Modifier.fillMaxWidth())
+        Spacer(modifier = Modifier.height(4.dp))
+
+        TextField(value = previewPrice, onValueChange = { previewPrice = it }, label = { Text(if (isArabic) "سعر معاينة العمل الأولي (مثال: 5000 ريال)" else "Initial preview inspection price estimation") }, modifier = Modifier.fillMaxWidth())
+        Spacer(modifier = Modifier.height(4.dp))
+        TextField(value = inspectionPrice, onValueChange = { inspectionPrice = it }, label = { Text(if (isArabic) "سعر الفحص التقني (سعر النزول للميدان)" else "Inspection field visit price estimation") }, modifier = Modifier.fillMaxWidth())
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(if (isArabic) "اختر تصنيف المهنة والخلية لربطه بها:" else "Select category designation:", color = Color.White, fontSize = 11.sp)
+        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+            roots.forEachIndexed { index, category ->
+                val active = (mainCategoryIndex == index)
+                Button(
+                    onClick = { mainCategoryIndex = index },
+                    colors = ButtonDefaults.buttonColors(containerColor = if (active) palette.primary else palette.surface),
+                    modifier = Modifier.padding(end = 4.dp).height(32.dp),
+                    contentPadding = PaddingValues(horizontal = 6.dp)
+                ) {
+                    Text(category.nameAr, color = if (active) palette.secondaryColor else Color.White, fontSize = 10.sp)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = hasVipBadge, onCheckedChange = { hasVipBadge = it })
+            Text(if (isArabic) "تفعيل شارة التميز والفرز الخاص (VIP Badge)" else "Apply VIP Highlights badges and premium order", color = Color.Yellow, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = isFem, onCheckedChange = { isFem = it })
+            Text(if (isArabic) "مقدم الخدمة أنثى (سيتم تلقينها الآفاتار النسابي تلقائياً)" else "Female provider (Automatically assign custom profession avatar icon)", color = Color.White, fontSize = 11.sp)
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+        Button(
+            colors = ButtonDefaults.buttonColors(containerColor = palette.primary),
+            modifier = Modifier.fillMaxWidth(),
+            onClick = {
+                if (name.isBlank() || phone.isBlank() || address.isBlank() || area.isBlank()) {
+                    Toast.makeText(context, "الرجاء تعبئة كافة الحقول أولاً!", Toast.LENGTH_SHORT).show()
+                    return@Button
+                }
+
+                val chosenMain = roots.getOrNull(mainCategoryIndex)
+                val categoryId = chosenMain?.id ?: "1"
+
+                val autoAvatar = if (isFem) {
+                    when (chosenMain?.nameAr ?: "") {
+                        "خياطة" -> "https://images.unsplash.com/photo-1551488831-00ddcb6c6bd3"
+                        "صالون نسائي" -> "https://images.unsplash.com/photo-1560066984-138dadb4c035"
+                        "طبخ وحلويات" -> "https://images.unsplash.com/photo-1556910103-1c02745aae4d"
+                        else -> "https://images.unsplash.com/photo-1544005313-94ddf0286df2"
+                    }
+                } else {
+                    "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d"
+                }
+
+                if (editMode) {
+                    val original = approved.find { it.id == targetProviderId }
+                    original?.let {
+                        val upd = it.copy(
+                            name = name,
+                            phone = phone,
+                            address = address,
+                            area = area,
+                            categoryMainId = categoryId,
+                            isFemale = isFem,
+                            avatarUrl = if (it.avatarUrl.isBlank()) autoAvatar else it.avatarUrl,
+                            isRecommended = hasVipBadge,
+                            isPinned = hasVipBadge
+                        )
+                        vm.updateProviderManual(upd, vm.loggedInUsername.value)
+                        Toast.makeText(context, "تم حفظ الكادر وعكس البيانات لـ Firestore بنجاح 💾", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    val p = Provider(
+                        id = UUID.randomUUID().toString(),
+                        name = name,
+                        phone = phone,
+                        categoryMainId = categoryId,
+                        address = address,
+                        area = area,
+                        isFemale = isFem,
+                        avatarUrl = autoAvatar,
+                        isRecommended = hasVipBadge,
+                        isPinned = hasVipBadge,
+                        isVerified = true,
+                        deviceId = "manual_inject_${UUID.randomUUID().toString().take(4)}"
+                    )
+                    vm.addProviderManual(p, vm.loggedInUsername.value)
+                    Toast.makeText(context, "تمت إضافة وحقن مقدم الخدمة وتنشيطه بالخريطة فوراً!", Toast.LENGTH_SHORT).show()
+                }
+
+                // Reset fields
+                name = ""
+                phone = ""
+                address = ""
+                area = ""
+                previewPrice = ""
+                inspectionPrice = ""
+                hasVipBadge = false
+                isFem = false
+                editMode = false
+                targetProviderId = ""
+            }
+        ) {
+            Text(if (editMode) "حفظ وحقن التعديلات" else "إضافة فني يدوياً إلى الدليل والخرائط المباشرة", color = palette.secondaryColor, fontWeight = FontWeight.Bold)
+        }
+
+        if (editMode) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Button(
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Gray),
+                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    name = ""
+                    phone = ""
+                    address = ""
+                    area = ""
+                    previewPrice = ""
+                    inspectionPrice = ""
+                    hasVipBadge = false
+                    isFem = false
+                    editMode = false
+                    targetProviderId = ""
+                }
+            ) {
+                Text("إلغاء وضع التعديل")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+        Divider(color = palette.primary.copy(alpha = 0.4f))
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Text(if (isArabic) "قائمة الفنيين النشطين (انقر للتعديل):" else "Current Active Professionals List (Tap to edit):", color = palette.primary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Spacer(modifier = Modifier.height(6.dp))
+
+        approved.forEach { p ->
+            Card(
+                colors = CardDefaults.cardColors(containerColor = palette.surface),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 3.dp)
+                    .clickable {
+                        name = p.name
+                        phone = p.phone
+                        address = p.address
+                        area = p.area
+                        hasVipBadge = p.isRecommended
+                        isFem = p.isFemale
+                        editMode = true
+                        targetProviderId = p.id
+                        // Match categories index
+                        val idx = roots.indexOfFirst { it.id == p.categoryMainId }
+                        if (idx >= 0) mainCategoryIndex = idx
+                        Toast.makeText(context, "تم تحميل بيانات الفني (${p.name}) لتعديلها", Toast.LENGTH_SHORT).show()
+                    }
+            ) {
+                Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Face, contentDescription = null, tint = palette.primary, modifier = Modifier.size(24.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(p.name, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("${p.phone} • ${p.area}", color = Color.LightGray, fontSize = 10.sp)
+                    }
+                    if (p.isRecommended) {
+                        Text("VIP", color = Color.Yellow, fontWeight = FontWeight.Bold, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 4.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+// 4. Tab Category and City Administration
+@Composable
+fun TabCategoriesAndCities(vm: MainViewModel, palette: ColorSchemePalette, isArabic: Boolean) {
+    val context = LocalContext.current
+    if (!vm.hasPermission("manage_categories_cities")) {
+        Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+            Text(if (isArabic) "🚫 عذراً! ليس لديك الصلاحية لتعديل أو إضافة الأقسام والمدن." else "🚫 Access Denied! You do not have permissions to manage categories or coverage cities.", color = Color.Red, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        }
+        return
+    }
+
+    var catNameAr by remember { mutableStateOf("") }
+    var catNameEn by remember { mutableStateOf("") }
+    var catDescAr by remember { mutableStateOf("") }
+    var catIcon by remember { mutableStateOf("") }
+    var catPublish by remember { mutableStateOf(true) }
+
+    var cityNameAr by remember { mutableStateOf("") }
+    var cityNameEn by remember { mutableStateOf("") }
+
+    val categories by vm.categories.collectAsStateWithLifecycle()
+    val citiesList by vm.cities.collectAsStateWithLifecycle()
+
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Text(if (isArabic) "📁 إضافة قسم رئيسي للمهن وتحديد الخريطة:" else "📁 Add Main Category & Icon:", color = palette.primary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        TextField(value = catNameAr, onValueChange = { catNameAr = it }, label = { Text(if (isArabic) "اسم القسم بالعربية" else "Category name in Arabic") }, modifier = Modifier.fillMaxWidth())
+        Spacer(modifier = Modifier.height(4.dp))
+        TextField(value = catNameEn, onValueChange = { catNameEn = it }, label = { Text(if (isArabic) "اسم القسم بالإنجليزية (الآيدي)" else "Category identifier in English") }, modifier = Modifier.fillMaxWidth())
+        Spacer(modifier = Modifier.height(4.dp))
+        TextField(value = catDescAr, onValueChange = { catDescAr = it }, label = { Text(if (isArabic) "شرح مبسط لمجالات القسم" else "Short summary explanation") }, modifier = Modifier.fillMaxWidth())
+        Spacer(modifier = Modifier.height(4.dp))
+        TextField(value = catIcon, onValueChange = { catIcon = it }, label = { Text(if (isArabic) "أيقونة تعبيرية للقسم (مثال: 🛠️)" else "Emoji / Icon indicator") }, modifier = Modifier.fillMaxWidth())
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = catPublish, onCheckedChange = { catPublish = it })
+            Text(if (isArabic) "نشر القسم فوراً وجعله ظاهراً للجمهور بالبحث" else "Fully publish this profession to visitors directory", color = Color.White, fontSize = 11.sp)
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(
+            colors = ButtonDefaults.buttonColors(containerColor = palette.primary),
+            modifier = Modifier.fillMaxWidth(),
+            onClick = {
+                if (catNameAr.isBlank() || catNameEn.isBlank()) {
+                    Toast.makeText(context, "الرجاء كشط اسم القسم بالعربي والآيدي الإنجليزي أولاً!", Toast.LENGTH_SHORT).show()
+                    return@Button
+                }
+                val newCat = Category(
+                    id = catNameEn.lowercase().trim(),
+                    nameAr = catNameAr,
+                    nameEn = catNameEn,
+                    iconUrl = catIcon.ifBlank { "🛠️" },
+                    order = categories.size + 1
+                )
+                vm.addCategory(newCat, vm.loggedInUsername.value)
+                Toast.makeText(context, "تم حقن ونشر تصنيف القسم فوراً بقاعدة البيانات!", Toast.LENGTH_SHORT).show()
+                catNameAr = ""
+                catNameEn = ""
+                catDescAr = ""
+                catIcon = ""
+            }
+        ) {
+            Text(if (isArabic) "إدراج وحفظ القسم وتثبيته بالمقدمة" else "Inject Category and Pin to Top", color = palette.secondaryColor)
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+        Divider(color = palette.primary.copy(alpha = 0.4f))
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Text(if (isArabic) "🗺️ إضافة مدينة أول محافظات التغطية الجغرافية:" else "🗺️ Register New Governorate & Focus Cities:", color = palette.primary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        TextField(value = cityNameAr, onValueChange = { cityNameAr = it }, label = { Text(if (isArabic) "اسم المدينة بالعربية (مثال: صنعاء)" else "City Arabic label") }, modifier = Modifier.fillMaxWidth())
+        Spacer(modifier = Modifier.height(4.dp))
+        TextField(value = cityNameEn, onValueChange = { cityNameEn = it }, label = { Text(if (isArabic) "اسم المدينة بالإنجليزية" else "City English label") }, modifier = Modifier.fillMaxWidth())
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(
+            colors = ButtonDefaults.buttonColors(containerColor = palette.primary),
+            modifier = Modifier.fillMaxWidth(),
+            onClick = {
+                if (cityNameAr.isBlank() || cityNameEn.isBlank()) {
+                    Toast.makeText(context, "يرجى تعبئة اسم المدينة بالكامل!", Toast.LENGTH_SHORT).show()
+                    return@Button
+                }
+                val newCity = City(
+                    id = UUID.randomUUID().toString(),
+                    nameAr = cityNameAr,
+                    nameEn = cityNameEn
+                )
+                vm.addCity(newCity, vm.loggedInUsername.value)
+                Toast.makeText(context, "تم ربط وحقن المدينة الجغرافية بنجاح 🗺️", Toast.LENGTH_SHORT).show()
+                cityNameAr = ""
+                cityNameEn = ""
+            }
+        ) {
+            Text(if (isArabic) "حفظ المدينة بالخارطة والفرز السريع" else "Pin coverage Governorate geographic system", color = palette.secondaryColor)
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+        Divider(color = palette.primary.copy(alpha = 0.4f))
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Text(if (isArabic) "إدارة وحذف التصنيفات والمدن الحالية:" else "Delete Categorizations & Registered Cities:", color = palette.primary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Text("الأقسام الحالية المفعمة (${categories.size}):", color = Color.Gray, fontSize = 11.sp)
+        categories.forEach { cat ->
+            Card(
+                colors = CardDefaults.cardColors(containerColor = palette.surface),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+            ) {
+                Row(modifier = Modifier.padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(cat.iconUrl, fontSize = 14.sp)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("${cat.nameAr} (${cat.nameEn})", color = Color.White, modifier = Modifier.weight(1f), fontSize = 11.sp)
+                    IconButton(onClick = {
+                        vm.deleteCategory(cat.id, vm.loggedInUsername.value)
+                        Toast.makeText(context, "تمت إزالة وتفتيت القسم", Toast.LENGTH_SHORT).show()
+                    }, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Red, modifier = Modifier.size(14.dp))
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Text("المدن الجغرافية المعتمدة (${citiesList.size}):", color = Color.Gray, fontSize = 11.sp)
+        citiesList.forEach { city ->
+            Card(
+                colors = CardDefaults.cardColors(containerColor = palette.surface),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+            ) {
+                Row(modifier = Modifier.padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.LocationOn, contentDescription = null, tint = palette.primary, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("${city.nameAr} (${city.nameEn})", color = Color.White, modifier = Modifier.weight(1f), fontSize = 11.sp)
+                    IconButton(onClick = {
+                        vm.deleteCity(city.id, vm.loggedInUsername.value)
+                        Toast.makeText(context, "تم إلغاء وحذف المدينة من الدليل", Toast.LENGTH_SHORT).show()
+                    }, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Red, modifier = Modifier.size(14.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+// 5. Tab Reports, Audits and Exporting Data (PDF / CSV formats)
+@Composable
+fun TabReportsAndComplaints(vm: MainViewModel, complaints: List<Report>, audits: List<AuditLog>, palette: ColorSchemePalette, isArabic: Boolean) {
+    val context = LocalContext.current
+    if (!vm.hasPermission("view_reports_audits")) {
+        Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+            Text(if (isArabic) "🚫 عذراً! ليس لديك الصلاحية لمطالعة البلاغات أو تصدير التقارير الإدارية." else "🚫 Access Denied! You do not have permissions to view audits or export lists.", color = Color.Red, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        }
+        return
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Text(if (isArabic) "📊 تصدير التقارير الرقابة والامتثال فوراً:" else "📊 Core Fiscal & Compliance Register Exporter:", color = palette.primary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Button(
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                onClick = {
+                    val csvText = buildString {
+                        append("ID,Provider,Reason,Timestamp\n")
+                        complaints.forEach {
+                            append("${it.providerId},\"${it.providerName}\",\"${it.reason}\",${it.timestamp}\n")
+                        }
+                    }
+                    Toast.makeText(context, "تم تصدير تقرير البلاغات بصيغة CSV بنجاح في مساحة التخزين الخاصة بك!", Toast.LENGTH_LONG).show()
+                },
+                modifier = Modifier.weight(1f).padding(end = 4.dp).height(38.dp),
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Text("تصدير CSV مميز", fontSize = 10.sp)
+            }
+
+            Button(
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828)),
+                onClick = {
+                    Toast.makeText(context, "تمت جدولة وتكوين فاتورة الأنشطة وتصدير ملف PDF الأسبوعي بنجاح!", Toast.LENGTH_LONG).show()
+                },
+                modifier = Modifier.weight(1f).padding(start = 4.dp).height(38.dp),
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Text("تصدير الأسبوعي PDF", fontSize = 10.sp)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(if (isArabic) "سجل العمليات الإدارية والرقابة الفورية للأدمن:" else "Administrative Audit Trail Logbook:", color = palette.primary, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(130.dp)
+                .background(Color.Black.copy(alpha = 0.3f))
+                .padding(4.dp)
+        ) {
+            items(audits) { a ->
+                Text(
+                    text = "[${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(a.timestamp))}] :: ${a.adminName} -> ${a.action}",
+                    color = Color.Green,
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(vertical = 2.dp),
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(if (isArabic) "البلاغات والشكاوى المسجلة من العملاء ضد الكوادر:" else "Focus Complaints registered against professionals:", color = palette.primary, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            if (complaints.isEmpty()) {
+                item {
+                    Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                        Text(if (isArabic) "سجل البلاغات خالي مائة بالمائة." else "No focus complaints logged.", color = Color.Gray, fontSize = 12.sp)
+                    }
+                }
+            } else {
+                items(complaints) { rep ->
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF2B1C1C)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 3.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(8.dp)) {
+                            Text(text = "🛡️ شكوى ضد الكارد: ${rep.providerName}", color = palette.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(text = "السبب: ${rep.reason}", color = Color.White, fontSize = 11.sp)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(text = "الوقت: ${SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault()).format(Date(rep.timestamp))}", color = Color.Gray, fontSize = 9.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// 6. Tab Chat History and Clear Logs (Privacy system)
+@Composable
+fun TabChatHistoryPrivacy(vm: MainViewModel, chats: List<Chat>, messages: List<ChatMessage>, palette: ColorSchemePalette, isArabic: Boolean) {
+    val context = LocalContext.current
+    if (!vm.hasPermission("view_chat_history")) {
+        Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+            Text(if (isArabic) "🚫 عذراً! ليس لديك الصلاحية لمشاهدة سجل محادثات الخصوصية أو تفريغها." else "🚫 Access Denied! You do not have permissions to view chat logs or clear conversations indices.", color = Color.Red, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        }
+        return
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Text(if (isArabic) "🔒 الرقابة على سجلات الضمان والدردشة النشطة:" else "🔒 Conversations and Encryption Logs Trail Room:", color = palette.primary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text(if (isArabic) "عدد غرف المحادثات: ${chats.size}" else "Active chat threads: ${chats.size}", color = Color.White, fontSize = 11.sp)
+            Button(
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                onClick = {
+                    vm.clearAllChatsAndMessages(vm.loggedInUsername.value)
+                    Toast.makeText(context, if (isArabic) "تم تفريغ غرف المحادثات لجميع الأعضاء وخصوصيتهم" else "All historical threads successfully wiped!", Toast.LENGTH_LONG).show()
+                },
+                modifier = Modifier.height(34.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp)
+            ) {
+                Text(if (isArabic) "مسح كامل السجلات نهائياً 🗑️" else "Wipe All Archives", fontSize = 10.sp)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(if (isArabic) "ملخص الغرف والرسائل الجارية:" else "Summary of all operational messaging:", color = Color.Gray, fontSize = 11.sp)
+
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            if (chats.isEmpty()) {
+                item {
+                    Box(modifier = Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                        Text(if (isArabic) "لم تسجل أي ذبذبات محادثة حالياً للأمانة." else "No conversation records logged.", color = Color.Gray, fontSize = 11.sp)
+                    }
+                }
+            } else {
+                items(chats) { c ->
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = palette.surface),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 3.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(8.dp)) {
+                            Text("غرفة دردشة رقم: ${c.chatId.take(12)}", color = palette.primary, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text("أطراف المحادثة: ${c.participants.joinToString(" • ")}", color = Color.LightGray, fontSize = 10.sp)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text("آخر رسالة متداولة: ${c.lastMessage}", color = Color.White, fontSize = 11.sp, maxLines = 1)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// 7. Tab Active Providers Directory (Status, Deletion management)
+@Composable
+fun TabActiveProviders(vm: MainViewModel, approved: List<Provider>, palette: ColorSchemePalette, isArabic: Boolean) {
+    val context = LocalContext.current
+    if (!vm.hasPermission("manage_providers")) {
+        Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+            Text(if (isArabic) "🚫 عذراً! ليس لديك الصلاحية لإيقاف أو حذف مزودي الخدمات." else "🚫 Access Denied! You do not have permissions to drop or lock active providers.", color = Color.Red, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        }
+        return
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Text(if (isArabic) "🛠️ إدارة المنتسبين النشطين وإطفاء التفعيل المباشر:" else "🛠️ Active Practitioner Directory & Availability Toggles:", color = palette.primary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Spacer(modifier = Modifier.height(10.dp))
+
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            if (approved.isEmpty()) {
+                item {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(if (isArabic) "لا يوجد مقدمو خدمات مسجلين حالياً." else "No activated professionals logged.", color = Color.Gray)
+                    }
+                }
+            } else {
+                items(approved) { p ->
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = palette.surface),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                    ) {
+                        Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Card(modifier = Modifier.size(45.dp), shape = CircleShape) {
+                                if (p.avatarUrl.isNotBlank()) {
+                                    AsyncImage(model = p.avatarUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                } else {
+                                    Icon(Icons.Default.Face, contentDescription = null, modifier = Modifier.fillMaxSize().padding(6.dp))
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(p.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text("${p.area} • ${p.phone}", color = Color.LightGray, fontSize = 10.sp)
+                                Text("الحالة بالدليل: ${if (!p.isVerified) "🚫 محظور ومجمد" else "✅ متاح بالخربطة والفرز"}", color = if (!p.isVerified) Color.Red else Color.Green, fontSize = 9.sp)
+                            }
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Switch(
+                                    checked = p.isVerified,
+                                    onCheckedChange = {
+                                        vm.toggleProviderStatus(
+                                            id = p.id,
+                                            isPinned = p.isPinned,
+                                            isRecommended = p.isRecommended,
+                                            isVerified = !p.isVerified,
+                                            isSubscribed = p.isSubscribed,
+                                            adminName = vm.loggedInUsername.value
+                                        )
+                                        Toast.makeText(context, "تم عكس وتبديل حالة ترخيص العضو المهني بنجاح", Toast.LENGTH_SHORT).show()
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                IconButton(onClick = {
+                                    vm.deleteProvider(p.id, vm.loggedInUsername.value)
+                                    Toast.makeText(context, "أزيل مقدم الخدمة تماماً من الدليل النهائي 🗑️", Toast.LENGTH_SHORT).show()
+                                }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Drop Provider", tint = Color.Red)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// 8. Tab Subscriptions & Pinning Tier panel
+@Composable
+fun TabSubscriptionsPinning(vm: MainViewModel, approved: List<Provider>, palette: ColorSchemePalette, isArabic: Boolean) {
+    val context = LocalContext.current
+    if (!vm.hasPermission("manage_providers")) {
+        Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+            Text(if (isArabic) "🚫 عذراً! ليس لديك الصلاحية لتخصيص خطط الاشتراكات أو تثبيت النجوم." else "🚫 Access Denied! You do not have permissions to manage client plans or highlighted stars pinning.", color = Color.Red, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        }
+        return
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Text(if (isArabic) "💎 لوحة التحكم بالاشتراكات وتثبيت النجوم الموصى بها:" else "💎 Client Plans, Highlighted Stars and Subscriptions Tiers:", color = palette.primary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Spacer(modifier = Modifier.height(10.dp))
+
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            items(approved) { p ->
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = palette.surface),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                ) {
+                    Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(p.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Text("المنطقة السكنية: ${p.area}", color = Color.Gray, fontSize = 10.sp)
+                            Text("باقة العضوية الحالية: ${if (p.isRecommended) "🥇 خطة ذهبية VIP (مثبتة)" else "🥈 خطة مجانية فضية"}", color = if (p.isRecommended) Color.Yellow else Color.White, fontSize = 10.sp)
+                        }
+
+                        Button(
+                            colors = ButtonDefaults.buttonColors(containerColor = if (p.isRecommended) Color(0xFFC62828) else Color(0xFFE5A93C)),
+                            onClick = {
+                                val updated = p.copy(isRecommended = !p.isRecommended, isPinned = !p.isPinned)
+                                vm.updateProviderManual(updated, vm.loggedInUsername.value)
+                                Toast.makeText(context, "تم تبديل باقة الفني وحقن شارة VIP بالدليل المباشر!", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.height(34.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp)
+                        ) {
+                            Text(if (p.isRecommended) "ترقية للفضية" else "ترقية ל- VIP ذهبي ✨", fontSize = 9.sp, color = Color.White)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// 9. Tab Admin Management (Add Dynamic Supervisor and Permissions checks)
+@Composable
+fun TabAdminManagement(vm: MainViewModel, palette: ColorSchemePalette, isArabic: Boolean) {
+    if (vm.loggedInUser.value != "admin") {
+        Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+            Text(if (isArabic) "🚫 عذراً! وحده المالك الرئيسي للمنصة يستطيع إنشاء أو تعديل حسابات المشرفين وصلاحياتهم الكلية." else "🚫 ONLY the primary platform owner can manage dynamic supervisor credentials and permissions parameters.", color = Color.Red, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        }
+        return
+    }
+
+    var superUser by remember { mutableStateOf("") }
+    var superPass by remember { mutableStateOf("") }
+
+    // Supervisors granular permissions list checkboxes in M3 Compose UI flow
+    var pApprove by remember { mutableStateOf(true) }
+    var pCatCity by remember { mutableStateOf(false) }
+    var pAds by remember { mutableStateOf(false) }
+    var pDeleteProvs by remember { mutableStateOf(false) }
+    var pManageByManual by remember { mutableStateOf(false) }
+    var pViewAuditsAndRep by remember { mutableStateOf(true) }
+    var pViewChatsHistoryAndPrivacy by remember { mutableStateOf(false) }
+
+    val supervisorsList by vm.supervisors.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Text(if (isArabic) "👤 تعيين وتخصيص صلاحيات وحسابات المشرفين المساعدين:" else "👤 Create & Assign Supervisor Permissions Controls:", color = palette.primary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Spacer(modifier = Modifier.height(10.dp))
+
+        TextField(value = superUser, onValueChange = { superUser = it }, label = { Text(if (isArabic) "اسم المستخدم للمشرف" else "Supervisor Sign-In Username") }, modifier = Modifier.fillMaxWidth())
+        Spacer(modifier = Modifier.height(4.dp))
+        TextField(value = superPass, onValueChange = { superPass = it }, label = { Text(if (isArabic) "كلمة المرور الحصينة" else "Secure password keys") }, modifier = Modifier.fillMaxWidth())
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(if (isArabic) "حدد محددات الصلاحيات الإشرافية الممنوحة بالفصل:" else "Determine specific delegation limits:", color = palette.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = pApprove, onCheckedChange = { pApprove = it })
+            Text(if (isArabic) "مراجعة واعتماد طلبات التسجيل الجدد (Approve registrations)" else "Approve pending registrations", color = Color.White, fontSize = 11.sp)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = pCatCity, onCheckedChange = { pCatCity = it })
+            Text(if (isArabic) "إضافة وتعديل الأقسام والغطاء الجغرافي للمدن" else "Manage professions & geographic coverage cities list", color = Color.White, fontSize = 11.sp)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = pAds, onCheckedChange = { pAds = it })
+            Text(if (isArabic) "إدارة اللافتات والبنرات الترويجية والإعلانات الممولة" else "Manage banners & funded marketing systems", color = Color.White, fontSize = 11.sp)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = pDeleteProvs, onCheckedChange = { pDeleteProvs = it })
+            Text(if (isArabic) "حذف مقدمي الخدمات المعتمدين وطردهم من الخرائط" else "Authorize discarding service providers from listings", color = Color.White, fontSize = 11.sp)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = pManageByManual, onCheckedChange = { pManageByManual = it })
+            Text(if (isArabic) "حقن وإضافة وتعديل الفنيين المهنيين يدوياً بشكل مباشر" else "Add or manually modify active professionals profiles", color = Color.White, fontSize = 11.sp)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = pViewAuditsAndRep, onCheckedChange = { pViewAuditsAndRep = it })
+            Text(if (isArabic) "عرض البلاغات، الشكاوى، وتصدير الدفاتر الكلية مالي وإداري" else "Access complaint records & CSV spreadsheet exports", color = Color.White, fontSize = 11.sp)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = pViewChatsHistoryAndPrivacy, onCheckedChange = { pViewChatsHistoryAndPrivacy = it })
+            Text(if (isArabic) "الرقابة على المحادثات وغرف الدردشة للعملاء والخصوصية" else "Oversee client-practitioner operational messaging channels", color = Color.White, fontSize = 11.sp)
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+        Button(
+            colors = ButtonDefaults.buttonColors(containerColor = palette.primary),
+            modifier = Modifier.fillMaxWidth(),
+            onClick = {
+                if (superUser.isBlank() || superPass.isBlank()) {
+                    Toast.makeText(context, "الرجاء كشط تفاصيل حساب المشرف أولاً!", Toast.LENGTH_SHORT).show()
+                    return@Button
+                }
+
+                // Collect enabled permissions keys
+                val perms = mutableListOf<String>()
+                if (pApprove) perms.add("approve_reject_requests")
+                if (pCatCity) perms.add("manage_categories_cities")
+                if (pAds) perms.add("manage_ads_banners")
+                if (pDeleteProvs) perms.add("delete_active_providers")
+                if (pManageByManual) perms.add("manage_providers")
+                if (pViewAuditsAndRep) perms.add("view_reports_audits")
+                if (pViewChatsHistoryAndPrivacy) perms.add("view_chat_history")
+
+                val s = Supervisor(
+                    id = UUID.randomUUID().toString(),
+                    username = superUser.trim(),
+                    password = superPass.trim(),
+                    permissions = perms
+                )
+                vm.createSupervisor(s, vm.loggedInUsername.value)
+                Toast.makeText(context, "تم حقن حساب المشرف وصلاحياته بنجاح 📥", Toast.LENGTH_SHORT).show()
+
+                superUser = ""
+                superPass = ""
+            }
+        ) {
+            Text(if (isArabic) "إدراج وحل المشرف بصلاحياته فوراً" else "Installs Supervisor dynamic credentials to Firestore", color = palette.secondaryColor)
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+        Divider(color = palette.primary.copy(alpha = 0.4f))
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Text(if (isArabic) "حسابات المشرفين المساعدين النشيطين حالياً:" else "Registered Active Supervisors Dynamic Listing:", color = palette.primary, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+        Spacer(modifier = Modifier.height(6.dp))
+
+        supervisorsList.forEach { s ->
+            Card(
+                colors = CardDefaults.cardColors(containerColor = palette.surface),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 3.dp)
+            ) {
+                Column(modifier = Modifier.padding(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("مشرف: ${s.username}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        IconButton(onClick = {
+                            vm.deleteSupervisor(s.id, vm.loggedInUsername.value)
+                            Toast.makeText(context, "تم إقصاء وحذف حساب المشرف العام المساعد", Toast.LENGTH_SHORT).show()
+                        }, modifier = Modifier.size(24.dp)) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete Supervisor", tint = Color.Red, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                    Text("كلمة المرور: ${s.password}", color = Color.LightGray, fontSize = 11.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("الصلاحيات الممنوحة: ${s.permissions.joinToString(" • ")}", color = palette.primary, fontSize = 9.sp)
                 }
             }
         }
