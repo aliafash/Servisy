@@ -600,6 +600,52 @@ class MainViewModel : ViewModel() {
                         }
                     }
                 }
+
+                // Synchronize banners dynamically
+                db.collection("banners").addSnapshotListener { snap, _ ->
+                    snap?.let {
+                        val list = snap.toObjects(Banner::class.java)
+                        if (list.isNotEmpty()) {
+                            _banners.value = list
+                        }
+                    }
+                }
+
+                // Synchronize pending requests dynamically
+                db.collection("pending_requests").addSnapshotListener { snap, _ ->
+                    snap?.let {
+                        val list = snap.toObjects(PendingProvider::class.java)
+                        _pendingRequests.value = list
+                    }
+                }
+
+                // Synchronize reports dynamically
+                db.collection("reports").addSnapshotListener { snap, _ ->
+                    snap?.let {
+                        val list = snap.toObjects(Report::class.java)
+                        _reports.value = list
+                    }
+                }
+
+                // Synchronize notifications dynamically
+                db.collection("notifications").addSnapshotListener { snap, _ ->
+                    snap?.let {
+                        val list = snap.toObjects(UserNotification::class.java)
+                        if (list.isNotEmpty()) {
+                            _notifications.value = list.sortedBy { it.timestamp }
+                        }
+                    }
+                }
+
+                // Synchronize admins dynamically
+                db.collection("admins").addSnapshotListener { snap, _ ->
+                    snap?.let {
+                        val list = snap.toObjects(AdminAccount::class.java)
+                        if (list.isNotEmpty()) {
+                            _adminAccounts.value = list
+                        }
+                    }
+                }
             }
         } catch (e: Exception) {
             // Firestore not initialized or loaded without config, safe silent fallback utilized
@@ -627,6 +673,9 @@ class MainViewModel : ViewModel() {
     // Provider mutations
     fun registerPendingProvider(p: PendingProvider) {
         _pendingRequests.value = _pendingRequests.value + p
+        try {
+            firestore?.collection("pending_requests")?.document(p.id)?.set(p)
+        } catch (e: Exception) {}
     }
 
     fun approveProviderRequest(pp: PendingProvider, admin: String) {
@@ -654,12 +703,16 @@ class MainViewModel : ViewModel() {
                 categoryId = newP.category
             )
             firestore?.collection("provider_category_relations")?.document(rel.id)?.set(rel)
+            firestore?.collection("pending_requests")?.document(pp.id)?.delete()
         } catch (e: Exception) {}
     }
 
     fun rejectProviderRequest(id: String, reason: String, admin: String) {
         _pendingRequests.value = _pendingRequests.value.filter { it.id != id }
         addAuditLog(admin, "رفض الطلب المقدم برقم $id لسبب $reason")
+        try {
+            firestore?.collection("pending_requests")?.document(id)?.delete()
+        } catch (e: Exception) {}
     }
 
     fun addProviderManual(p: Provider, admin: String) {
@@ -801,11 +854,17 @@ class MainViewModel : ViewModel() {
     // Complaints logic
     fun addReport(rep: Report) {
         _reports.value = listOf(rep) + _reports.value
+        try {
+            firestore?.collection("reports")?.document(rep.id)?.set(rep)
+        } catch (e: Exception) {}
     }
 
     fun approveReport(id: String, admin: String) {
         _reports.value = _reports.value.filter { it.id != id }
         addAuditLog(admin, "إدارة البلاغات: تم حل ومراجعة الشكوى رقم $id")
+        try {
+            firestore?.collection("reports")?.document(id)?.delete()
+        } catch (e: Exception) {}
     }
 
     // Chat Logic
