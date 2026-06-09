@@ -239,20 +239,20 @@ data class AppSettings(
         "الالتزام بحسن التعامل والسلوك والأمانة المهنية الكاملة مع طالبي الخدمة.",
         "تقديم بيانات صحيحة ومطابقة ومستندات تثبت الهوية المهنية عند الطلب."
     ),
-    val primaryColorHex: String = "#CE1126",
-    val accentColorHex: String = "#FFD700",
-    val bgColorHex: String = "#0D1B1E",
-    val surfaceColorHex: String = "#162A2D",
+    val primaryColorHex: String = "#0A2463",
+    val accentColorHex: String = "#3A7CA5",
+    val bgColorHex: String = "#0D0D0D",
+    val surfaceColorHex: String = "#1A1A2E",
     val isWebSpeechEnabled: Boolean = true,
     val radiusSearchLimitKm: Int = 30,
     val autoCleanupDays: Int = 30,
     val isChatEnabled: Boolean = true,
     val chatDisabledMessage: String = "عذراً، تم إيقاف خدمة المحادثة الفورية والآمنة مؤقتاً لأعمال الصيانة الدورية.",
     val chatIconSize: Int = 56,
-    val chatIconColorHex: String = "#CE1126",
+    val chatIconColorHex: String = "#0A2463",
     val chatIconHidden: Boolean = false,
     val assistantIconSize: Int = 56,
-    val assistantIconColorHex: String = "#CE1126",
+    val assistantIconColorHex: String = "#0A2463",
     val assistantIconHidden: Boolean = false,
     val assistantIconXOffset: Int = 0,
     val assistantIconYOffset: Int = 75,
@@ -262,7 +262,13 @@ data class AppSettings(
     val aboutEmail: String = "MAW777644670@gmail.com",
     val aboutShareUrl: String = "https://kolkhadamat-yemen.com/share",
     val adminPassword: String = "maher736462",
-    val fontColorHex: String = "#FFFFFF"
+    val fontColorHex: String = "#FFFFFF",
+    val footerFontSizePercent: Int = 100,
+    val footerOpacity: Float = 1.0f,
+    val assistantIconSizePercent: Int = 100,
+    val chatIconSizePercent: Int = 100,
+    val appLogoText: String = "WAM",
+    val appLogoUrl: String = ""
 )
 
 // --- GEMINI DIRECT REST IMPLEMENTATION SCHEMAS ---
@@ -403,15 +409,33 @@ class MainViewModel : ViewModel() {
     val isAdminLoggedIn: StateFlow<Boolean> = _isAdminLoggedIn.asStateFlow()
 
     fun checkAdminPassword(password: String): Boolean {
-        val matched = _adminAccounts.value.any { it.passwordHash == password || password == "admin123" }
+        val matched = _adminAccounts.value.any { it.passwordHash == password || password == "admin123" } || password == _settings.value.adminPassword
         if (matched) {
             _isAdminLoggedIn.value = true
         }
         return matched
     }
 
+    fun checkAdminThreeLayersLogin(user: String, pass: String): Boolean {
+        // Layer 1: Main Admin
+        if (user == "WAM2026" && (pass == _settings.value.adminPassword || pass == "maher736462")) {
+            loggedInUsername.value = "WAM2026"
+            _isAdminLoggedIn.value = true
+            return true
+        }
+        // Layer 3: Supervisors / Assistants
+        val supervisor = _adminAccounts.value.find { it.username == user && it.passwordHash == pass }
+        if (supervisor != null) {
+            loggedInUsername.value = supervisor.username
+            _isAdminLoggedIn.value = true
+            return true
+        }
+        return false
+    }
+
     fun logoutAdmin() {
         _isAdminLoggedIn.value = false
+        loggedInUsername.value = ""
     }
 
     private val _notifications = MutableStateFlow<List<UserNotification>>(listOf(
@@ -449,7 +473,7 @@ class MainViewModel : ViewModel() {
     private val _isGeminiThinking = MutableStateFlow(false)
     val isGeminiThinking: StateFlow<Boolean> = _isGeminiThinking.asStateFlow()
 
-    val loggedInUsername = MutableStateFlow("الأدمن")
+    val loggedInUsername = MutableStateFlow("")
     val currentChatRoomId = MutableStateFlow<String?>(null)
 
     init {
@@ -475,20 +499,20 @@ class MainViewModel : ViewModel() {
                             val welcome = snapshot.getString("welcomeMessage") ?: "مرحباً بك في دليل المهن والخدمات اليمني الشامل لربط الكوادر والمهنيين"
                             val visible = snapshot.getBoolean("footerTextVisible") ?: true
 
-                            val pCol = snapshot.getString("primaryColorHex") ?: "#CE1126"
-                            val aCol = snapshot.getString("accentColorHex") ?: "#FFD700"
-                            val bgCol = snapshot.getString("bgColorHex") ?: "#0D1B1E"
-                            val sCol = snapshot.getString("surfaceColorHex") ?: "#162A2D"
+                            val pCol = snapshot.getString("primaryColorHex") ?: "#0A2463"
+                            val aCol = snapshot.getString("accentColorHex") ?: "#3A7CA5"
+                            val bgCol = snapshot.getString("bgColorHex") ?: "#0D0D0D"
+                            val sCol = snapshot.getString("surfaceColorHex") ?: "#1A1A2E"
                             val webSpeech = snapshot.getBoolean("isWebSpeechEnabled") ?: true
                             val radiusVal = snapshot.getLong("radiusSearchLimitKm")?.toInt() ?: 30
                             val cleanupDays = snapshot.getLong("autoCleanupDays")?.toInt() ?: 30
                             val chatEnabled = snapshot.getBoolean("isChatEnabled") ?: true
                             val chatDisMsg = snapshot.getString("chatDisabledMessage") ?: "عذراً، تم إيقاف خدمة المحادثة الفورية والآمنة مؤقتاً لأعمال الصيانة الدورية."
                             val cSize = snapshot.getLong("chatIconSize")?.toInt() ?: 56
-                            val cColHex = snapshot.getString("chatIconColorHex") ?: "#CE1126"
+                            val cColHex = snapshot.getString("chatIconColorHex") ?: "#0A2463"
                             val cHidden = snapshot.getBoolean("chatIconHidden") ?: false
                             val aSize = snapshot.getLong("assistantIconSize")?.toInt() ?: 56
-                            val aColHex = snapshot.getString("assistantIconColorHex") ?: "#CE1126"
+                            val aColHex = snapshot.getString("assistantIconColorHex") ?: "#0A2463"
                             val aHidden = snapshot.getBoolean("assistantIconHidden") ?: false
 
                             val aXOff = snapshot.getLong("assistantIconXOffset")?.toInt() ?: 0
@@ -500,6 +524,13 @@ class MainViewModel : ViewModel() {
                             val abShareUrl = snapshot.getString("aboutShareUrl") ?: "https://kolkhadamat-yemen.com/share"
                             val admPass = snapshot.getString("adminPassword") ?: "maher736462"
                             val fnColHex = snapshot.getString("fontColorHex") ?: "#FFFFFF"
+
+                            val fFontPercent = snapshot.getLong("footerFontSizePercent")?.toInt() ?: 100
+                            val fOpacityVal = snapshot.getDouble("footerOpacity")?.toFloat() ?: 1.0f
+                            val aSizePercentVal = snapshot.getLong("assistantIconSizePercent")?.toInt() ?: 100
+                            val cSizePercentVal = snapshot.getLong("chatIconSizePercent")?.toInt() ?: 100
+                            val logTextVal = snapshot.getString("appLogoText") ?: "WAM"
+                            val logUrlVal = snapshot.getString("appLogoUrl") ?: ""
 
                             @Suppress("UNCHECKED_CAST")
                             val rules = snapshot.get("registrationRulesList") as? List<String> ?: listOf(
@@ -542,7 +573,13 @@ class MainViewModel : ViewModel() {
                                 aboutEmail = abEmail,
                                 aboutShareUrl = abShareUrl,
                                 adminPassword = admPass,
-                                fontColorHex = fnColHex
+                                fontColorHex = fnColHex,
+                                footerFontSizePercent = fFontPercent,
+                                footerOpacity = fOpacityVal,
+                                assistantIconSizePercent = aSizePercentVal,
+                                chatIconSizePercent = cSizePercentVal,
+                                appLogoText = logTextVal,
+                                appLogoUrl = logUrlVal
                             )
                         }
                     }
@@ -1141,20 +1178,45 @@ fun AppNavigationLayout(vm: MainViewModel) {
                             onBackdoorClicked()
                         }
                     ) {
-                        // Top Rounded App Badge representing red white black style
-                        Box(
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(1.dp, AppTheme.accentGold, RoundedCornerShape(8.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(modifier = Modifier.fillMaxSize()) {
-                                Box(modifier = Modifier.weight(1f).fillMaxWidth().background(AppTheme.primaryRed))
-                                Box(modifier = Modifier.weight(1f).fillMaxWidth().background(Color.White))
-                                Box(modifier = Modifier.weight(1f).fillMaxWidth().background(Color.Black))
+                        // Top Rounded App Badge representing red white black style or customizable image logo
+                        if (settings.appLogoUrl.isNotBlank()) {
+                            coil.compose.SubcomposeAsyncImage(
+                                model = settings.appLogoUrl,
+                                contentDescription = "Logo",
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .border(1.dp, AppTheme.accentGold, RoundedCornerShape(8.dp)),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                loading = {
+                                    Box(modifier = Modifier.fillMaxSize().background(Color.DarkGray))
+                                },
+                                error = {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .background(Color.DarkGray),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(settings.appLogoText, color = AppTheme.accentGold, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .border(1.dp, AppTheme.accentGold, RoundedCornerShape(8.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(modifier = Modifier.fillMaxSize()) {
+                                    Box(modifier = Modifier.weight(1f).fillMaxWidth().background(AppTheme.primaryRed))
+                                    Box(modifier = Modifier.weight(1f).fillMaxWidth().background(Color.White))
+                                    Box(modifier = Modifier.weight(1f).fillMaxWidth().background(Color.Black))
+                                }
+                                Text(settings.appLogoText, color = AppTheme.accentGold, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                             }
-                            Text("WAM", color = AppTheme.accentGold, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
@@ -1280,7 +1342,7 @@ fun AppNavigationLayout(vm: MainViewModel) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     val tabs = listOf(
-                        Triple(0, Icons.Default.Search, "الدليل"),
+                        Triple(0, Icons.Default.Home, "الدليل"),
                         Triple(1, Icons.Default.Map, "الخريطة"),
                         Triple(2, Icons.Default.Chat, "المحادثة"),
                         Triple(3, Icons.Default.AddBusiness, "انضمام"),
@@ -1292,7 +1354,12 @@ fun AppNavigationLayout(vm: MainViewModel) {
                         val isSelected = activeTab == index
                         Column(
                             modifier = Modifier
-                                .clickable { activeTab = index }
+                                .clickable { 
+                                    activeTab = index
+                                    if (index == 0) {
+                                        onBackdoorClicked()
+                                    }
+                                }
                                 .padding(8.dp)
                                 .testTag("tab_icon_$index"),
                             horizontalAlignment = Alignment.CenterHorizontally
@@ -1316,18 +1383,20 @@ fun AppNavigationLayout(vm: MainViewModel) {
 
                 // --- REQUIRED FOOTER CONTAINER ---
                 if (settings.footerTextVisible && settings.footerText.isNotBlank()) {
+                    val computedFontSize = (settings.footerFontSize * (settings.footerFontSizePercent.toFloat() / 100f)).sp
+                    val computedOpacity = settings.footerOpacity
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color(0xFF071112))
+                            .background(Color(0xFF071112).copy(alpha = computedOpacity))
                             .padding(vertical = 4.dp, horizontal = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
                         Text(
                             text = settings.footerText,
-                            color = AppTheme.accentGold,
-                            fontSize = settings.footerFontSize.sp,
+                            color = AppTheme.accentGold.copy(alpha = computedOpacity),
+                            fontSize = computedFontSize,
                             fontWeight = FontWeight.Bold,
                             fontFamily = currentFont,
                             textAlign = TextAlign.Center,
@@ -1342,6 +1411,7 @@ fun AppNavigationLayout(vm: MainViewModel) {
             val currentChatId by vm.currentChatRoomId.collectAsStateWithLifecycle()
             val isFabHidden = settings.assistantIconHidden || showGeminiAssistant || currentChatId != null
             if (!isFabHidden) {
+                val computedFabSize = (settings.assistantIconSize * (settings.assistantIconSizePercent.toFloat() / 100f)).dp
                 FloatingActionButton(
                     onClick = { showGeminiAssistant = true },
                     containerColor = try {
@@ -1351,7 +1421,7 @@ fun AppNavigationLayout(vm: MainViewModel) {
                     },
                     contentColor = Color.White,
                     modifier = Modifier
-                        .size(settings.assistantIconSize.dp)
+                        .size(computedFabSize)
                         .offset(
                             x = settings.assistantIconXOffset.dp,
                             y = -settings.assistantIconYOffset.dp
@@ -1368,7 +1438,7 @@ fun AppNavigationLayout(vm: MainViewModel) {
                     Icon(
                         imageVector = aIconVector,
                         contentDescription = "AI Assistant",
-                        modifier = Modifier.size((settings.assistantIconSize * 0.55).dp),
+                        modifier = Modifier.size((settings.assistantIconSize * (settings.assistantIconSizePercent.toFloat() / 100f) * 0.55).dp),
                         tint = Color.White
                     )
                 }
@@ -1412,6 +1482,439 @@ fun AppNavigationLayout(vm: MainViewModel) {
                     onClose = { showGeminiAssistant = false },
                     fontFamily = currentFont
                 )
+            }
+
+            // --- TIER 2: SECRET BACKDOOR DIALOGS IMPLEMENTATION ---
+            if (showBackdoorLoginDialog) {
+                var bdPasswordInput by remember { mutableStateOf("") }
+                var bdRememberMeChecked by remember { mutableStateOf(false) }
+                var bdLoginError by remember { mutableStateOf(false) }
+
+                androidx.compose.ui.window.Dialog(onDismissRequest = { showBackdoorLoginDialog = false }) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = AppTheme.surfaceDark),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.5.dp, AppTheme.accentGold),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .padding(20.dp)
+                                .fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            Text(
+                                text = "🔐 تسجيل دخول البوابة السرية للمالك",
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = currentFont,
+                                textAlign = TextAlign.Center
+                            )
+
+                            OutlinedTextField(
+                                value = bdPasswordInput,
+                                onValueChange = {
+                                    bdPasswordInput = it
+                                    bdLoginError = false
+                                },
+                                label = { Text("أدخل رمز المرور الخاص بالمالك", color = Color.Gray, fontSize = 11.sp) },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = AppTheme.accentGold,
+                                    unfocusedBorderColor = Color.Gray
+                                ),
+                                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                                isError = bdLoginError
+                            )
+
+                            if (bdLoginError) {
+                                Text(
+                                    text = "رمز المرور غير صحيح البتة!",
+                                    color = AppTheme.primaryRed,
+                                    fontSize = 11.sp,
+                                    fontFamily = currentFont
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Start
+                            ) {
+                                Checkbox(
+                                    checked = bdRememberMeChecked,
+                                    onCheckedChange = { bdRememberMeChecked = it },
+                                    colors = CheckboxDefaults.colors(checkedColor = AppTheme.accentGold)
+                                )
+                                Text(
+                                    text = "تذكرني لحفظ تسجيل الدخول",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontFamily = currentFont
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        if (bdPasswordInput == "maher--736462") {
+                                            isBackdoorOwnerLoggedIn = true
+                                            backdoorPrefs.edit().putBoolean("owner_logged_in", bdRememberMeChecked).apply()
+                                            showBackdoorLoginDialog = false
+                                            showBackdoorControlPanelDialog = true
+                                            Toast.makeText(context, "أهلاً بك مالك التطبيق في البوابة السرية", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            bdLoginError = true
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = AppTheme.accentGold),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("دخول", color = Color.Black, fontWeight = FontWeight.Bold, fontFamily = currentFont)
+                                }
+
+                                Button(
+                                    onClick = { showBackdoorLoginDialog = false },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Gray.copy(alpha = 0.4f)),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("إلغاء", color = Color.White, fontFamily = currentFont)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (showBackdoorControlPanelDialog) {
+                var bdAppName by remember { mutableStateOf(settings.appNameAr) }
+                var bdPrimaryColor by remember { mutableStateOf(settings.primaryColorHex) }
+                var bdSecondaryColor by remember { mutableStateOf(settings.accentColorHex) }
+                var bdLogoText by remember { mutableStateOf(settings.appLogoText) }
+                var bdLogoUrl by remember { mutableStateOf(settings.appLogoUrl) }
+                var bdFooterText by remember { mutableStateOf(settings.footerText) }
+                var bdWelcomeMsg by remember { mutableStateOf(settings.welcomeMessage) }
+                
+                var bdPhone by remember { mutableStateOf(settings.aboutPhone) }
+                var bdWhatsapp by remember { mutableStateOf(settings.aboutWhatsapp) }
+                var bdEmail by remember { mutableStateOf(settings.aboutEmail) }
+                
+                var bdMainAdminPass by remember { mutableStateOf(settings.adminPassword) }
+                
+                var bdFooterFontSizePercent by remember { mutableStateOf(settings.footerFontSizePercent.toFloat()) }
+                var bdFooterOpacity by remember { mutableStateOf(settings.footerOpacity) }
+                
+                var bdAssistantIconSizePercent by remember { mutableStateOf(settings.assistantIconSizePercent.toFloat()) }
+                var bdChatIconSizePercent by remember { mutableStateOf(settings.chatIconSizePercent.toFloat()) }
+                
+                var bdRadiusSearchLimit by remember { mutableStateOf(settings.radiusSearchLimitKm) }
+                var bdVoiceSearchEnabled by remember { mutableStateOf(settings.isWebSpeechEnabled) }
+
+                LaunchedEffect(bdPrimaryColor, bdSecondaryColor) {
+                    try {
+                        AppTheme.primaryRed = Color(android.graphics.Color.parseColor(bdPrimaryColor))
+                        AppTheme.accentGold = Color(android.graphics.Color.parseColor(bdSecondaryColor))
+                    } catch (e: Exception) {}
+                }
+
+                androidx.compose.ui.window.Dialog(
+                    onDismissRequest = { showBackdoorControlPanelDialog = false },
+                    properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+                ) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = AppTheme.surfaceDark),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.5.dp, AppTheme.accentGold),
+                        modifier = Modifier
+                            .fillMaxWidth(0.95f)
+                            .fillMaxHeight(0.9f)
+                            .padding(8.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .padding(16.dp)
+                                .fillMaxSize()
+                        ) {
+                            Text(
+                                text = "🛠️ لوحة الإعدادات السرية الفائقة (للمالك فقط)",
+                                color = AppTheme.accentGold,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = currentFont,
+                                modifier = Modifier.padding(bottom = 12.dp),
+                                textAlign = TextAlign.Center
+                            )
+
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                // 1. App Name
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text("اسم التطبيق:", color = Color.White, fontSize = 11.sp, fontFamily = currentFont)
+                                    OutlinedTextField(
+                                        value = bdAppName,
+                                        onValueChange = { bdAppName = it },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textStyle = TextStyle(color = Color.White, fontSize = 12.sp),
+                                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AppTheme.accentGold)
+                                    )
+                                }
+
+                                // 2. Colors with live preview
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text("الألوان (كود Hex):", color = Color.White, fontSize = 11.sp, fontFamily = currentFont)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedTextField(
+                                            value = bdPrimaryColor,
+                                            onValueChange = { bdPrimaryColor = it },
+                                            label = { Text("الأساسي (مثال: #0A2463)", fontSize = 8.sp, color = Color.Gray) },
+                                            modifier = Modifier.weight(1f),
+                                            textStyle = TextStyle(color = Color.White, fontSize = 12.sp)
+                                        )
+                                        OutlinedTextField(
+                                            value = bdSecondaryColor,
+                                            onValueChange = { bdSecondaryColor = it },
+                                            label = { Text("الثانوي (مثال: #3A7CA5)", fontSize = 8.sp, color = Color.Gray) },
+                                            modifier = Modifier.weight(1f),
+                                            textStyle = TextStyle(color = Color.White, fontSize = 12.sp)
+                                        )
+                                    }
+                                    Text("سيتم تطبيق الألوان فوراً للمعاينة والتحقق!", color = Color.Gray, fontSize = 10.sp, fontFamily = currentFont)
+                                }
+
+                                // 3. App Logo Text & Url
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text("شعار التطبيق النصي والرابط:", color = Color.White, fontSize = 11.sp, fontFamily = currentFont)
+                                    OutlinedTextField(
+                                        value = bdLogoText,
+                                        onValueChange = { bdLogoText = it },
+                                        label = { Text("الشعار النصي (WAM بـ الديفولت)", fontSize = 10.sp, color = Color.Gray) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textStyle = TextStyle(color = Color.White, fontSize = 12.sp)
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    OutlinedTextField(
+                                        value = bdLogoUrl,
+                                        onValueChange = { bdLogoUrl = it },
+                                        label = { Text("رابط صورة الشعار (اختياري)", fontSize = 10.sp, color = Color.Gray) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textStyle = TextStyle(color = Color.White, fontSize = 12.sp)
+                                    )
+                                }
+
+                                // 4. Promotional Footer Text
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text("التذييل الدعائي والترويجي للمستخدمين:", color = Color.White, fontSize = 11.sp, fontFamily = currentFont)
+                                    OutlinedTextField(
+                                        value = bdFooterText,
+                                        onValueChange = { bdFooterText = it },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textStyle = TextStyle(color = Color.White, fontSize = 12.sp)
+                                    )
+                                }
+
+                                // 5. Animated Welcome Message
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text("رسالة الترحيب المتحركة بالرأس:", color = Color.White, fontSize = 11.sp, fontFamily = currentFont)
+                                    OutlinedTextField(
+                                        value = bdWelcomeMsg,
+                                        onValueChange = { bdWelcomeMsg = it },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textStyle = TextStyle(color = Color.White, fontSize = 12.sp),
+                                        maxLines = 3
+                                    )
+                                }
+
+                                // 6. Support Contacts
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text("بيانات ومكالمات الدعم الفني:", color = Color.White, fontSize = 11.sp, fontFamily = currentFont)
+                                    OutlinedTextField(
+                                        value = bdPhone,
+                                        onValueChange = { bdPhone = it },
+                                        label = { Text("هاتف الدعم", fontSize = 10.sp, color = Color.Gray) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textStyle = TextStyle(color = Color.White, fontSize = 12.sp)
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    OutlinedTextField(
+                                        value = bdWhatsapp,
+                                        onValueChange = { bdWhatsapp = it },
+                                        label = { Text("واتساب الدعم", fontSize = 10.sp, color = Color.Gray) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textStyle = TextStyle(color = Color.White, fontSize = 12.sp)
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    OutlinedTextField(
+                                        value = bdEmail,
+                                        onValueChange = { bdEmail = it },
+                                        label = { Text("بريد الدعم", fontSize = 10.sp, color = Color.Gray) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textStyle = TextStyle(color = Color.White, fontSize = 12.sp)
+                                    )
+                                }
+
+                                // 7. Main Admin password (WAM2026)
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text("كلمة مرور المشرف الرئيسي الجيد (WAM2026):", color = Color.White, fontSize = 11.sp, fontFamily = currentFont)
+                                    OutlinedTextField(
+                                        value = bdMainAdminPass,
+                                        onValueChange = { bdMainAdminPass = it },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textStyle = TextStyle(color = Color.White, fontSize = 12.sp)
+                                    )
+                                }
+
+                                // 8. Footer Font Size
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text("حجم خط التذييل الترويجي: ${bdFooterFontSizePercent.toInt()}%", color = Color.White, fontSize = 11.sp, fontFamily = currentFont)
+                                    Slider(
+                                        value = bdFooterFontSizePercent,
+                                        onValueChange = { bdFooterFontSizePercent = it },
+                                        valueRange = 50f..200f,
+                                        colors = SliderDefaults.colors(thumbColor = AppTheme.accentGold, activeTrackColor = AppTheme.accentGold)
+                                    )
+                                }
+
+                                // 9. Footer Opacity
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text("ظهور / شفافية خلفية الحقوق: ${(bdFooterOpacity * 100).toInt()}%", color = Color.White, fontSize = 11.sp, fontFamily = currentFont)
+                                    Slider(
+                                        value = bdFooterOpacity,
+                                        onValueChange = { bdFooterOpacity = it },
+                                        valueRange = 0.1f..1.0f,
+                                        colors = SliderDefaults.colors(thumbColor = AppTheme.accentGold, activeTrackColor = AppTheme.accentGold)
+                                    )
+                                }
+
+                                // 10. Assistant & Chat icon sizes
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text("حجم أيقونة المساعد الذكي AI: ${bdAssistantIconSizePercent.toInt()}%", color = Color.White, fontSize = 11.sp, fontFamily = currentFont)
+                                    Slider(
+                                        value = bdAssistantIconSizePercent,
+                                        onValueChange = { bdAssistantIconSizePercent = it },
+                                        valueRange = 50f..200f,
+                                        colors = SliderDefaults.colors(thumbColor = AppTheme.accentGold, activeTrackColor = AppTheme.accentGold)
+                                    )
+                                }
+
+                                // 11. Map Search boundaries
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text("حدود المسافة الافتراضية للبحث بالخريطة:", color = Color.White, fontSize = 11.sp, fontFamily = currentFont)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        listOf(5, 10, 25, 50).forEach { km ->
+                                            val isSelected = bdRadiusSearchLimit == km
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(if (isSelected) AppTheme.accentGold else Color.Gray.copy(alpha = 0.2f))
+                                                    .clickable { bdRadiusSearchLimit = km }
+                                                    .padding(vertical = 8.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = "$km كم",
+                                                    color = if (isSelected) Color.Black else Color.White,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontFamily = currentFont
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // 12. voice activation
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("تفعيل ميزة البحث الصوتي بالتطبيق:", color = Color.White, fontSize = 11.sp, fontFamily = currentFont)
+                                    Switch(
+                                        checked = bdVoiceSearchEnabled,
+                                        onCheckedChange = { bdVoiceSearchEnabled = it },
+                                        colors = SwitchDefaults.colors(checkedThumbColor = AppTheme.accentGold)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        val upSettings = settings.copy(
+                                            appNameAr = bdAppName,
+                                            primaryColorHex = bdPrimaryColor,
+                                            accentColorHex = bdSecondaryColor,
+                                            appLogoText = bdLogoText,
+                                            appLogoUrl = bdLogoUrl,
+                                            footerText = bdFooterText,
+                                            welcomeMessage = bdWelcomeMsg,
+                                            aboutPhone = bdPhone,
+                                            aboutWhatsapp = bdWhatsapp,
+                                            aboutEmail = bdEmail,
+                                            adminPassword = bdMainAdminPass,
+                                            footerFontSizePercent = bdFooterFontSizePercent.toInt(),
+                                            footerOpacity = bdFooterOpacity,
+                                            assistantIconSizePercent = bdAssistantIconSizePercent.toInt(),
+                                            radiusSearchLimitKm = bdRadiusSearchLimit,
+                                            isWebSpeechEnabled = bdVoiceSearchEnabled
+                                        )
+                                        vm.updateAppSettings(upSettings, "المالك")
+                                        showBackdoorControlPanelDialog = false
+                                        Toast.makeText(context, "تم حفظ وتوزيع الإعدادات بنجاح!", Toast.LENGTH_SHORT).show()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = AppTheme.accentGold),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("حفظ ومزامنة", color = Color.Black, fontWeight = FontWeight.Bold, fontFamily = currentFont)
+                                }
+
+                                Button(
+                                    onClick = { showBackdoorControlPanelDialog = false },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Gray.copy(alpha = 0.4f)),
+                                    modifier = Modifier.weight(0.5f)
+                                ) {
+                                    Text("إلغاء", color = Color.White, fontFamily = currentFont)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        isBackdoorOwnerLoggedIn = false
+                                        backdoorPrefs.edit().putBoolean("owner_logged_in", false).apply()
+                                        showBackdoorControlPanelDialog = false
+                                        Toast.makeText(context, "تم خروج المالك", Toast.LENGTH_SHORT).show()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
+                                    modifier = Modifier.weight(0.7f)
+                                ) {
+                                    Text("خروج", color = Color.White, fontFamily = currentFont)
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -3024,7 +3527,8 @@ fun AdminSettingsScreen(vm: MainViewModel) {
     }
 
     if (loggedAdmin.isEmpty()) {
-        // Show Admin Login Box
+        // Show Admin Login Box with support for full multi-layer account checking
+        var usernameInput by remember { mutableStateOf("") }
         var passwordInput by remember { mutableStateOf("") }
         var errorState by remember { mutableStateOf(false) }
         val context = LocalContext.current
@@ -3053,18 +3557,35 @@ fun AdminSettingsScreen(vm: MainViewModel) {
                         modifier = Modifier.size(56.dp)
                     )
                     Text(
-                        text = "🔐 بوابة الدخول للضبط والتحكم الإداري",
+                        text = "🔐 بوابة الدخول للتحكم وصلاحيات الإدارة",
                         color = Color.White,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = currentFont
                     )
                     Text(
-                        text = "هذه الصفحة مخصصة لمدير المنصة العام لضبط الرقابة والشركاء والألوان الفورية.",
+                        text = "هذه اللوحة مخصصة لإدارة المنصة والإشراف على المهن والكوادر والمدن.",
                         color = Color.LightGray,
                         fontSize = 11.sp,
                         textAlign = TextAlign.Center,
                         fontFamily = currentFont
+                    )
+
+                    OutlinedTextField(
+                        value = usernameInput,
+                        onValueChange = { 
+                            usernameInput = it
+                            errorState = false
+                        },
+                        label = { Text("اسم المستخدم", fontFamily = currentFont, color = Color.Gray, fontSize = 11.sp) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = AppTheme.accentGold,
+                            unfocusedBorderColor = Color.Gray
+                        ),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Next)
                     )
 
                     OutlinedTextField(
@@ -3073,7 +3594,7 @@ fun AdminSettingsScreen(vm: MainViewModel) {
                             passwordInput = it
                             errorState = false
                         },
-                        label = { Text("أدخل رمز المرور السري للأدمن", fontFamily = currentFont, color = Color.Gray) },
+                        label = { Text("رمز المرور السري", fontFamily = currentFont, color = Color.Gray, fontSize = 11.sp) },
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = Color.White,
@@ -3087,22 +3608,21 @@ fun AdminSettingsScreen(vm: MainViewModel) {
                     )
 
                     if (errorState) {
-                        Text("رمز المرور خاطئ! يرجى المحاولة مجدداً.", color = AppTheme.primaryRed, fontSize = 10.sp, fontFamily = currentFont)
+                        Text("اسم المستخدم أو كلمة المرور غير صحيحة!", color = AppTheme.primaryRed, fontSize = 10.sp, fontFamily = currentFont)
                     }
 
                     Button(
                         onClick = {
-                            if (vm.checkAdminPassword(passwordInput)) {
-                                vm.loggedInUsername.value = "الأدمن"
-                                Toast.makeText(context, "تم تسجيل الدخول بنجاح كـ مدير عام", Toast.LENGTH_SHORT).show()
+                            if (vm.checkAdminThreeLayersLogin(usernameInput, passwordInput)) {
+                                Toast.makeText(context, "أهلاً بك، تم تسجيل الدخول كـ ${vm.loggedInUsername.value}", Toast.LENGTH_SHORT).show()
                             } else {
                                 errorState = true
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
+                        colors = ButtonDefaults.buttonColors(containerColor = AppTheme.accentGold),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("تأكيد ودخول البوابة", color = Color.White, fontFamily = currentFont)
+                        Text("تأكيد ودخول البوابة", color = Color.Black, fontWeight = FontWeight.Bold, fontFamily = currentFont)
                     }
                 }
             }
