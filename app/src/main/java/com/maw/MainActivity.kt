@@ -253,7 +253,16 @@ data class AppSettings(
     val chatIconHidden: Boolean = false,
     val assistantIconSize: Int = 56,
     val assistantIconColorHex: String = "#CE1126",
-    val assistantIconHidden: Boolean = false
+    val assistantIconHidden: Boolean = false,
+    val assistantIconXOffset: Int = 0,
+    val assistantIconYOffset: Int = 75,
+    val assistantIconType: String = "SmartToy",
+    val aboutPhone: String = "777644670",
+    val aboutWhatsapp: String = "777644670",
+    val aboutEmail: String = "MAW777644670@gmail.com",
+    val aboutShareUrl: String = "https://kolkhadamat-yemen.com/share",
+    val adminPassword: String = "maher736462",
+    val fontColorHex: String = "#FFFFFF"
 )
 
 // --- GEMINI DIRECT REST IMPLEMENTATION SCHEMAS ---
@@ -482,6 +491,16 @@ class MainViewModel : ViewModel() {
                             val aColHex = snapshot.getString("assistantIconColorHex") ?: "#CE1126"
                             val aHidden = snapshot.getBoolean("assistantIconHidden") ?: false
 
+                            val aXOff = snapshot.getLong("assistantIconXOffset")?.toInt() ?: 0
+                            val aYOff = snapshot.getLong("assistantIconYOffset")?.toInt() ?: 75
+                            val aIconType = snapshot.getString("assistantIconType") ?: "SmartToy"
+                            val abPhone = snapshot.getString("aboutPhone") ?: "777644670"
+                            val abWhatsapp = snapshot.getString("aboutWhatsapp") ?: "777644670"
+                            val abEmail = snapshot.getString("aboutEmail") ?: "MAW777644670@gmail.com"
+                            val abShareUrl = snapshot.getString("aboutShareUrl") ?: "https://kolkhadamat-yemen.com/share"
+                            val admPass = snapshot.getString("adminPassword") ?: "maher736462"
+                            val fnColHex = snapshot.getString("fontColorHex") ?: "#FFFFFF"
+
                             @Suppress("UNCHECKED_CAST")
                             val rules = snapshot.get("registrationRulesList") as? List<String> ?: listOf(
                                 "يجب أن يكون المتقدم مواطناً يمنياً أو مقيماً مرخصاً بالجمهورية اليمنية.",
@@ -514,7 +533,16 @@ class MainViewModel : ViewModel() {
                                 chatIconHidden = cHidden,
                                 assistantIconSize = aSize,
                                 assistantIconColorHex = aColHex,
-                                assistantIconHidden = aHidden
+                                assistantIconHidden = aHidden,
+                                assistantIconXOffset = aXOff,
+                                assistantIconYOffset = aYOff,
+                                assistantIconType = aIconType,
+                                aboutPhone = abPhone,
+                                aboutWhatsapp = abWhatsapp,
+                                aboutEmail = abEmail,
+                                aboutShareUrl = abShareUrl,
+                                adminPassword = admPass,
+                                fontColorHex = fnColHex
                             )
                         }
                     }
@@ -1000,6 +1028,31 @@ fun AppNavigationLayout(vm: MainViewModel) {
     var showGeminiAssistant by remember { mutableStateOf(false) }
     val settings by vm.settings.collectAsStateWithLifecycle()
 
+    val backdoorPrefs = remember { context.getSharedPreferences("backdoor_prefs", Context.MODE_PRIVATE) }
+    var isBackdoorOwnerLoggedIn by remember { mutableStateOf(backdoorPrefs.getBoolean("owner_logged_in", false)) }
+    var backdoorClickCount by remember { mutableIntStateOf(0) }
+    var lastBackdoorClickTime by remember { mutableLongStateOf(0L) }
+    var showBackdoorLoginDialog by remember { mutableStateOf(false) }
+    var showBackdoorControlPanelDialog by remember { mutableStateOf(false) }
+
+    val onBackdoorClicked = {
+        val now = System.currentTimeMillis()
+        if (now - lastBackdoorClickTime < 2500) {
+            backdoorClickCount++
+        } else {
+            backdoorClickCount = 1
+        }
+        lastBackdoorClickTime = now
+        if (backdoorClickCount >= 5) {
+            backdoorClickCount = 0
+            if (isBackdoorOwnerLoggedIn) {
+                showBackdoorControlPanelDialog = true
+            } else {
+                showBackdoorLoginDialog = true
+            }
+        }
+    }
+
     // UI state maps to dynamic values
     val currentFont = when (settings.selectedFontName) {
         "Monospace" -> FontFamily.Monospace
@@ -1020,7 +1073,15 @@ fun AppNavigationLayout(vm: MainViewModel) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            onBackdoorClicked()
+                        }
+                    ) {
                         // Top Rounded App Badge representing red white black style
                         Box(
                             modifier = Modifier
@@ -1219,15 +1280,39 @@ fun AppNavigationLayout(vm: MainViewModel) {
         },
         floatingActionButton = {
             // CHATBOT ASSISTANT FLOATING TRIGGER
-            FloatingActionButton(
-                onClick = { showGeminiAssistant = true },
-                containerColor = AppTheme.primaryRed,
-                contentColor = Color.White,
-                modifier = Modifier
-                    .padding(bottom = 20.dp)
-                    .testTag("ai_fab_trigger")
-            ) {
-                Icon(Icons.Default.SmartToy, contentDescription = "AI Assistant")
+            val currentChatId by vm.currentChatRoomId.collectAsStateWithLifecycle()
+            val isFabHidden = settings.assistantIconHidden || showGeminiAssistant || currentChatId != null
+            if (!isFabHidden) {
+                FloatingActionButton(
+                    onClick = { showGeminiAssistant = true },
+                    containerColor = try {
+                        Color(android.graphics.Color.parseColor(settings.assistantIconColorHex))
+                    } catch (e: Exception) {
+                        AppTheme.primaryRed
+                    },
+                    contentColor = Color.White,
+                    modifier = Modifier
+                        .size(settings.assistantIconSize.dp)
+                        .offset(
+                            x = settings.assistantIconXOffset.dp,
+                            y = -settings.assistantIconYOffset.dp
+                        )
+                        .testTag("ai_fab_trigger")
+                ) {
+                    val aIconVector = when (settings.assistantIconType) {
+                        "Support" -> Icons.Default.HeadsetMic
+                        "Chat" -> Icons.Default.Chat
+                        "Star" -> Icons.Default.Star
+                        "Help" -> Icons.Default.Help
+                        else -> Icons.Default.SmartToy
+                    }
+                    Icon(
+                        imageVector = aIconVector,
+                        contentDescription = "AI Assistant",
+                        modifier = Modifier.size((settings.assistantIconSize * 0.55).dp),
+                        tint = Color.White
+                    )
+                }
             }
         },
         floatingActionButtonPosition = FabPosition.End
@@ -1242,7 +1327,14 @@ fun AppNavigationLayout(vm: MainViewModel) {
                 when (tab) {
                     0 -> DirectoryScreen(vm)
                     1 -> MockMapViewScreen(vm)
-                    2 -> DirectChatScreen(vm)
+                    2 -> {
+                        val parsedColor = try {
+                            Color(android.graphics.Color.parseColor(settings.fontColorHex))
+                        } catch (e: Exception) {
+                            Color.White
+                        }
+                        DirectChatScreen(vm = vm, fontFamily = currentFont, fontColor = parsedColor)
+                    }
                     3 -> JoinApplicationScreen(vm)
                     4 -> AppInfoScreen(vm)
                     5 -> AdminSettingsScreen(vm)
@@ -2383,14 +2475,14 @@ fun BookAppointmentDialog(
 
 // --- TAB 2: DIRECT CHATS SCENE ---
 @Composable
-fun DirectChatScreen(vm: MainViewModel) {
+fun DirectChatScreen(vm: MainViewModel, fontFamily: FontFamily, fontColor: Color) {
     val chats by vm.chats.collectAsStateWithLifecycle()
     val messages by vm.chatMessages.collectAsStateWithLifecycle()
     val activeRoomId by vm.currentChatRoomId.collectAsStateWithLifecycle()
 
     if (activeRoomId != null) {
         // RENDER ACTIVE CHAT CONVERSATION SCREEN
-        ConversationScreen(vm = vm, chatId = activeRoomId!!)
+        ConversationScreen(vm = vm, chatId = activeRoomId!!, fontFamily = fontFamily, fontColor = fontColor)
     } else {
         // RENDER ACTIVE CHAT LIST
         Column(
@@ -2399,12 +2491,12 @@ fun DirectChatScreen(vm: MainViewModel) {
                 .background(AppTheme.darkBg)
                 .padding(12.dp)
         ) {
-            Text("💬 قنوات المحادثات الفورية والآمنة", color = AppTheme.accentGold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text("💬 قنوات المحادثات الفورية والآمنة", color = AppTheme.accentGold, fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = fontFamily)
             Spacer(modifier = Modifier.height(10.dp))
 
             if (chats.isEmpty()) {
                 Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Text("لا توجد قنوات تواصل مفتوحة حالياً. يمكنك بدء تواصل مباشر من دليل الحرفيين.", color = Color.Gray, textAlign = TextAlign.Center)
+                    Text("لا توجد قنوات تواصل مفتوحة حالياً. يمكنك بدء تواصل مباشر من دليل الحرفيين.", color = Color.Gray, textAlign = TextAlign.Center, fontFamily = fontFamily)
                 }
             } else {
                 LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -2423,13 +2515,13 @@ fun DirectChatScreen(vm: MainViewModel) {
                                         .background(AppTheme.primaryRed),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(chat.providerName.take(2), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text(chat.providerName.take(2), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = fontFamily)
                                 }
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(chat.providerName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text(chat.providerName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, fontFamily = fontFamily)
                                     Spacer(modifier = Modifier.height(2.dp))
-                                    Text(chat.lastMessage, color = AppTheme.grayText, fontSize = 11.sp, maxLines = 1)
+                                    Text(chat.lastMessage, color = AppTheme.grayText, fontSize = 11.sp, maxLines = 1, fontFamily = fontFamily)
                                 }
                                 Icon(Icons.Default.ArrowForwardIos, contentDescription = "Open", tint = Color.Gray, modifier = Modifier.size(12.dp))
                             }
@@ -2443,7 +2535,7 @@ fun DirectChatScreen(vm: MainViewModel) {
 
 // --- CONVERSATION SUB-SCREEN (FIXED TEXT COLOR & ADDED SEND BUTTON) ---
 @Composable
-fun ConversationScreen(vm: MainViewModel, chatId: String) {
+fun ConversationScreen(vm: MainViewModel, chatId: String, fontFamily: FontFamily, fontColor: Color) {
     val chats by vm.chats.collectAsStateWithLifecycle()
     val messages by vm.chatMessages.collectAsStateWithLifecycle()
     val activeChat = chats.find { it.id == chatId }
@@ -2471,8 +2563,8 @@ fun ConversationScreen(vm: MainViewModel, chatId: String) {
                 }
                 Spacer(modifier = Modifier.width(6.dp))
                 Column {
-                    Text(activeChat?.providerName ?: "محادثة آمنة", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    Text("نشط حالياً بالدليل • عبر الإنترنت", color = AppTheme.lightGreen, fontSize = 9.sp)
+                    Text(activeChat?.providerName ?: "محادثة آمنة", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, fontFamily = fontFamily)
+                    Text("نشط حالياً بالدليل • عبر الإنترنت", color = AppTheme.lightGreen, fontSize = 9.sp, fontFamily = fontFamily)
                 }
             }
         }
@@ -2507,9 +2599,10 @@ fun ConversationScreen(vm: MainViewModel, chatId: String) {
                         Text(
                             text = msg.message,
                             // CRITICAL FIX: Explicitly enforce white/gold colors so font is ALWAYS clearly visible
-                            color = if (isMyMessage) Color.White else AppTheme.textLight,
+                            color = if (isMyMessage) Color.White else fontColor,
                             fontSize = 12.sp,
-                            lineHeight = 15.sp
+                            lineHeight = 15.sp,
+                            fontFamily = fontFamily
                         )
                     }
                 }
@@ -2527,12 +2620,12 @@ fun ConversationScreen(vm: MainViewModel, chatId: String) {
             TextField(
                 value = typingInput,
                 onValueChange = { typingInput = it },
-                placeholder = { Text("اكتب رسالتك لطلب الخدمة...", color = Color.Gray) },
+                placeholder = { Text("اكتب رسالتك لطلب الخدمة...", color = Color.Gray, fontFamily = fontFamily, fontSize = 12.sp) },
                 modifier = Modifier
                     .weight(1f)
                     .testTag("chat_input_field"),
+                textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontFamily = fontFamily, fontSize = 12.sp),
                 colors = TextFieldDefaults.colors(
-                    // CRITICAL FIX: Ensure black/dark text does not hide against matching container background
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White,
                     focusedContainerColor = AppTheme.darkBg,
@@ -2552,24 +2645,27 @@ fun ConversationScreen(vm: MainViewModel, chatId: String) {
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // CRITICAL FIX: Added explicit send button/arrow to meet user demand
-            IconButton(
+            // CRITICAL FIX: High-visibility solid Arabic send button directly meets user requirements
+            Button(
                 onClick = {
                     if (typingInput.isNotBlank()) {
                         vm.sendChatMessage(chatId, "زائر", "user", typingInput)
                         typingInput = ""
                     }
                 },
+                colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
+                shape = RoundedCornerShape(8.dp),
                 modifier = Modifier
-                    .clip(CircleShape)
-                    .background(AppTheme.primaryRed)
-                    .testTag("chat_send_btn")
+                    .height(48.dp)
+                    .testTag("chat_send_btn"),
+                contentPadding = PaddingValues(horizontal = 14.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Send,
-                    contentDescription = "Send",
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
+                Text(
+                    text = "إرسال 🚀",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = fontFamily
                 )
             }
         }
@@ -4104,6 +4200,13 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
     var aSizeValue by remember { mutableFloatStateOf(settings.assistantIconSize.toFloat()) }
     var aColField by remember { mutableStateOf(settings.assistantIconColorHex) }
     var aHiddenField by remember { mutableStateOf(settings.assistantIconHidden) }
+    var aXOffsetValue by remember { mutableFloatStateOf(settings.assistantIconXOffset.toFloat()) }
+    var aYOffsetValue by remember { mutableFloatStateOf(settings.assistantIconYOffset.toFloat()) }
+    var aIconTypeField by remember { mutableStateOf(settings.assistantIconType) }
+
+    var fontColorHexField by remember { mutableStateOf(settings.fontColorHex) }
+    var selectedFontField by remember { mutableStateOf(settings.selectedFontName) }
+    var footerTextVisibleVal by remember { mutableStateOf(settings.footerTextVisible) }
 
     var isChatEnabledVal by remember { mutableStateOf(settings.isChatEnabled) }
     var chatDisMsgVal by remember { mutableStateOf(settings.chatDisabledMessage) }
@@ -4181,6 +4284,53 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
                         Text("✨ السمة المميزة", color = Color.Black, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                     }
                 }
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Button(
+                        onClick = {
+                            primaryColorField = "#9E9E9E"
+                            accentColorField = "#E0E0E0"
+                            bgColorField = "#121212"
+                            surfaceColorField = "#1C1C1C"
+                            Toast.makeText(context, "تم تطبيق سمة كوزميك سيلفر الفضية الهادئة!", Toast.LENGTH_SHORT).show()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9E9E9E)),
+                        modifier = Modifier.weight(1f).height(38.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Text("🌌 كوزميك سيلفر", color = Color.Black, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = {
+                            primaryColorField = "#D4AF37"
+                            accentColorField = "#FFD700"
+                            bgColorField = "#1A1A1A"
+                            surfaceColorField = "#2D2D2D"
+                            Toast.makeText(context, "تم تطبيق سمة الذهبي الفاخر الكلاسيكية العريقة!", Toast.LENGTH_SHORT).show()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD4AF37)),
+                        modifier = Modifier.weight(1f).height(38.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Text("✨ ذهبي فاخر", color = Color.Black, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = {
+                            primaryColorField = "#004B49"
+                            accentColorField = "#50C878"
+                            bgColorField = "#0C1814"
+                            surfaceColorField = "#152A20"
+                            Toast.makeText(context, "تم تطبيق سمة الزمردي الراقي الأنيق!", Toast.LENGTH_SHORT).show()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF004B49)),
+                        modifier = Modifier.weight(1f).height(38.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Text("🟢 زمردي راقي", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
 
@@ -4255,9 +4405,77 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
                     colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
                 )
 
+                Text("الموقع الأفقي للأيقونة (X Offset): ${aXOffsetValue.toInt()}dp", color = Color.White, fontSize = 11.sp)
+                Slider(value = aXOffsetValue, onValueChange = { aXOffsetValue = it }, valueRange = -150f..150f)
+
+                Text("الموقع العمودي للأيقونة (Y Offset): ${aYOffsetValue.toInt()}dp", color = Color.White, fontSize = 11.sp)
+                Slider(value = aYOffsetValue, onValueChange = { aYOffsetValue = it }, valueRange = 0f..600f)
+
+                Text("اختر شكل/رمز أيقونة المساعد الذكي:", color = Color.White, fontSize = 11.sp)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    listOf(
+                        "SmartToy" to "🤖 معالج ذكي",
+                        "Support" to "📞 خدمة مهنية",
+                        "Chat" to "💬 تواصل مباشر",
+                        "Star" to "✨ ذكاء اصطناعي",
+                        "Help" to "❓ مساعدة فورية"
+                    ).forEach { (icName, icLbl) ->
+                        val isSelected = aIconTypeField == icName
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { aIconTypeField = icName },
+                            label = { Text(icLbl, fontSize = 8.sp, color = if (isSelected) Color.Black else Color.White) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = AppTheme.accentGold
+                            )
+                        )
+                    }
+                }
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = aHiddenField, onCheckedChange = { aHiddenField = it })
-                    Text("إخفاء أيقونة المساعد الذكي AI", color = Color.White, fontSize = 11.sp)
+                    Text("حذف / إخفاء أيقونة المساعد الذكي بالكامل للزوار", color = Color.White, fontSize = 11.sp)
+                }
+            }
+        }
+
+        Card(colors = CardDefaults.cardColors(containerColor = AppTheme.surfaceDark)) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("✍️ تخصيص خطوط ونصوص البرمجية وألوانها الفورية", color = AppTheme.accentGold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+
+                OutlinedTextField(
+                    value = fontColorHexField,
+                    onValueChange = { fontColorHexField = it },
+                    label = { Text("كود لون الخطوط العام للبرق الأبيض (HEX)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                )
+
+                Text("اختر نوع الخط الافتراضي المفضل بالدليل للتطبيق:", color = Color.White, fontSize = 11.sp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    listOf(
+                        "Default" to "عادي",
+                        "SansSerif" to "نسخ",
+                        "Serif" to "رقعة",
+                        "Monospace" to "برمجي",
+                        "Cursive" to "يدوي"
+                    ).forEach { (fn, lbl) ->
+                        val isSelected = selectedFontField == fn
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { selectedFontField = fn },
+                            label = { Text(lbl, fontSize = 10.sp, color = if (isSelected) Color.Black else Color.White) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = AppTheme.accentGold
+                            )
+                        )
+                    }
                 }
             }
         }
@@ -4370,6 +4588,11 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
                 )
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = footerTextVisibleVal, onCheckedChange = { footerTextVisibleVal = it })
+                    Text("إظهار نص تذييل الحقوق في أسفل الشاشة الرئيسية", color = Color.White, fontSize = 11.sp)
+                }
             }
         }
 
@@ -4448,6 +4671,12 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
                     assistantIconSize = aSizeValue.toInt(),
                     assistantIconColorHex = aColField,
                     assistantIconHidden = aHiddenField,
+                    assistantIconXOffset = aXOffsetValue.toInt(),
+                    assistantIconYOffset = aYOffsetValue.toInt(),
+                    assistantIconType = aIconTypeField,
+                    fontColorHex = fontColorHexField.ifBlank { "#FFFFFF" },
+                    selectedFontName = selectedFontField,
+                    footerTextVisible = footerTextVisibleVal,
                     isChatEnabled = isChatEnabledVal,
                     chatDisabledMessage = chatDisMsgVal,
                     isWebSpeechEnabled = isVoiceSpeechEnabledVal,
@@ -4501,17 +4730,21 @@ fun SmartAssistantSheet(
     }
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.7f))
-            .clickable { onClose() } // Click outside to close standard overlay
+        modifier = Modifier.fillMaxSize()
     ) {
+        // Backdrop overlay sibling (handles closing on click outside safely without intercepting input focus of the card)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.7f))
+                .clickable { onClose() }
+        )
+
         Card(
             modifier = Modifier
                 .fillMaxWidth(0.92f)
                 .fillMaxHeight(0.85f)
-                .align(Alignment.Center)
-                .clickable(enabled = false) {}, // Prevent closing click inside
+                .align(Alignment.Center),
             colors = CardDefaults.cardColors(containerColor = AppTheme.surfaceDark),
             shape = RoundedCornerShape(16.dp),
             border = BorderStroke(1.5.dp, AppTheme.accentGold)
