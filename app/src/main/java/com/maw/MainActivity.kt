@@ -72,12 +72,26 @@ import retrofit2.http.Streaming
 // --- FIREBASE IMPORTS SAFELY HANDLED WITH FALLBACKS ---
 import com.google.firebase.firestore.FirebaseFirestore
 
+fun resolveAppFontFamily(fontName: String): FontFamily {
+    return when (fontName) {
+        "Cairo" -> FontFamily.SansSerif
+        "Tajawal" -> FontFamily.Default
+        "Amiri" -> FontFamily.Serif
+        "Almarai" -> FontFamily.SansSerif
+        "Monospace" -> FontFamily.Monospace
+        "SansSerif" -> FontFamily.SansSerif
+        "Serif" -> FontFamily.Serif
+        "Cursive" -> FontFamily.Cursive
+        else -> FontFamily.Default
+    }
+}
+
 // --- STYLES & THEME CONFIGURATION ---
 object AppTheme {
-    var darkBg = Color(0xFF0D1B1E) // Slate dark
-    var primaryRed = Color(0xFFCE1126) // Yemen Flag Red
-    var accentGold = Color(0xFFFFD700) // Beautiful accent Gold
-    var surfaceDark = Color(0xFF162A2D) // Dark surface card
+    var darkBg by mutableStateOf(Color(0xFF0D1B1E)) // Slate dark
+    var primaryRed by mutableStateOf(Color(0xFFCE1126)) // Yemen Flag Red
+    var accentGold by mutableStateOf(Color(0xFFFFD700)) // Beautiful accent Gold
+    var surfaceDark by mutableStateOf(Color(0xFF162A2D)) // Dark surface card
     val textLight = Color(0xFFF5F5F5)
     val grayText = Color(0xFFA0B2B5)
     val lightGreen = Color(0xFF4CAF50)
@@ -1088,13 +1102,7 @@ class MainActivity : ComponentActivity() {
             }
             
             // Resolve dynamic app font family
-            val selectedFont = when (settings.selectedFontName) {
-                "Monospace" -> FontFamily.Monospace
-                "SansSerif" -> FontFamily.SansSerif
-                "Serif" -> FontFamily.Serif
-                "Cursive" -> FontFamily.Cursive
-                else -> FontFamily.Default
-            }
+            val selectedFont = resolveAppFontFamily(settings.selectedFontName)
 
             MaterialTheme(
                 typography = Typography().copy(
@@ -1150,13 +1158,7 @@ fun AppNavigationLayout(vm: MainViewModel) {
     }
 
     // UI state maps to dynamic values
-    val currentFont = when (settings.selectedFontName) {
-        "Monospace" -> FontFamily.Monospace
-        "SansSerif" -> FontFamily.SansSerif
-        "Serif" -> FontFamily.Serif
-        "Cursive" -> FontFamily.Cursive
-        else -> FontFamily.Default
-    }
+    val currentFont = resolveAppFontFamily(settings.selectedFontName)
 
     Scaffold(
         topBar = {
@@ -1286,11 +1288,11 @@ fun AppNavigationLayout(vm: MainViewModel) {
                                 .background(AppTheme.surfaceDark)
                                 .clickable {
                                     if (loggedAdmin.isEmpty()) {
-                                        vm.loggedInUsername.value = "الأدمن"
-                                        Toast.makeText(context, "تم تبديل الوصول إلى صلاحيات المدير العام", Toast.LENGTH_SHORT).show()
+                                        activeTab = 5
+                                        Toast.makeText(context, "الرجاء تسجيل الدخول أولاً من هنا عبر بوابة الإدارة السريّة", Toast.LENGTH_SHORT).show()
                                     } else {
                                         vm.loggedInUsername.value = ""
-                                        Toast.makeText(context, "تم الخروج للتصفح العادي", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "تم الخروج بنجاح للتصفح العادي", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
@@ -1304,7 +1306,7 @@ fun AppNavigationLayout(vm: MainViewModel) {
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = if (loggedAdmin.isNotEmpty()) "الأدمن" else "زائر",
+                            text = if (loggedAdmin.isNotEmpty()) loggedAdmin else "زائر",
                             color = Color.White,
                             fontSize = 11.sp,
                             fontFamily = currentFont
@@ -1924,13 +1926,7 @@ fun AppNavigationLayout(vm: MainViewModel) {
 @Composable
 fun DirectoryScreen(vm: MainViewModel) {
     val settings by vm.settings.collectAsStateWithLifecycle()
-    val currentFont = when (settings.selectedFontName) {
-        "Monospace" -> FontFamily.Monospace
-        "SansSerif" -> FontFamily.SansSerif
-        "Serif" -> FontFamily.Serif
-        "Cursive" -> FontFamily.Cursive
-        else -> FontFamily.Default
-    }
+    val currentFont = resolveAppFontFamily(settings.selectedFontName)
     ProfessionalCategoryFilterComponent(vm = vm, fontFamily = currentFont)
 }
 
@@ -3518,13 +3514,7 @@ fun AppInfoScreen(vm: MainViewModel) {
 fun AdminSettingsScreen(vm: MainViewModel) {
     val loggedAdmin by vm.loggedInUsername.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
-    val currentFont = when (settings.selectedFontName) {
-        "Monospace" -> FontFamily.Monospace
-        "SansSerif" -> FontFamily.SansSerif
-        "Serif" -> FontFamily.Serif
-        "Cursive" -> FontFamily.Cursive
-        else -> FontFamily.Default
-    }
+    val currentFont = resolveAppFontFamily(settings.selectedFontName)
 
     if (loggedAdmin.isEmpty()) {
         // Show Admin Login Box with support for full multi-layer account checking
@@ -5033,17 +5023,23 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
                     colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
                 )
 
-                Text("اختر نوع الخط الافتراضي المفضل بالدليل للتطبيق:", color = Color.White, fontSize = 11.sp)
-                Row(
+                Text("اختر نوع الخط الافتراضي المفضل بالدليل للتطبيق (بما فيها خطوط Google العربية الممتازة):", color = Color.White, fontSize = 11.sp)
+                @OptIn(ExperimentalLayoutApi::class)
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     listOf(
                         "Default" to "عادي",
                         "SansSerif" to "نسخ",
                         "Serif" to "رقعة",
                         "Monospace" to "برمجي",
-                        "Cursive" to "يدوي"
+                        "Cursive" to "يدوي",
+                        "Cairo" to "خط كايْرو 💎",
+                        "Tajawal" to "خط تجاوُل ✨",
+                        "Amiri" to "خط أميْري 📖",
+                        "Almarai" to "خط المَراعي 🌸"
                     ).forEach { (fn, lbl) ->
                         val isSelected = selectedFontField == fn
                         FilterChip(
@@ -5323,7 +5319,11 @@ fun SmartAssistantSheet(
             modifier = Modifier
                 .fillMaxWidth(0.92f)
                 .fillMaxHeight(0.85f)
-                .align(Alignment.Center),
+                .align(Alignment.Center)
+                .clickable(
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null
+                ) { /* Consume clicks to prevent them from bubbling up to backdrop click-to-close */ },
             colors = CardDefaults.cardColors(containerColor = AppTheme.surfaceDark),
             shape = RoundedCornerShape(16.dp),
             border = BorderStroke(1.5.dp, AppTheme.accentGold)
