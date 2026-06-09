@@ -275,6 +275,11 @@ data class AppSettings(
     val aboutWhatsapp: String = "777644670",
     val aboutEmail: String = "MAW777644670@gmail.com",
     val aboutShareUrl: String = "https://kolkhadamat-yemen.com/share",
+    val aboutPhoneVisible: Boolean = true,
+    val aboutWhatsappVisible: Boolean = true,
+    val aboutEmailVisible: Boolean = true,
+    val aboutShareUrlVisible: Boolean = true,
+    val aboutImageVisible: Boolean = true,
     val adminPassword: String = "maher736462",
     val fontColorHex: String = "#FFFFFF",
     val footerFontSizePercent: Int = 100,
@@ -579,6 +584,11 @@ class MainViewModel : ViewModel() {
                             val aYOff = snapshot.getLong("assistantIconYOffset")?.toInt() ?: 75
                             val aIconType = snapshot.getString("assistantIconType") ?: "SmartToy"
                             val abPhone = snapshot.getString("aboutPhone") ?: "777644670"
+                            val abPhoneVis = snapshot.getBoolean("aboutPhoneVisible") ?: true
+                            val abWhatsappVis = snapshot.getBoolean("aboutWhatsappVisible") ?: true
+                            val abEmailVis = snapshot.getBoolean("aboutEmailVisible") ?: true
+                            val abShareVis = snapshot.getBoolean("aboutShareUrlVisible") ?: true
+                            val abImgVis = snapshot.getBoolean("aboutImageVisible") ?: true
                             val abWhatsapp = snapshot.getString("aboutWhatsapp") ?: "777644670"
                             val abEmail = snapshot.getString("aboutEmail") ?: "MAW777644670@gmail.com"
                             val abShareUrl = snapshot.getString("aboutShareUrl") ?: "https://kolkhadamat-yemen.com/share"
@@ -632,6 +642,11 @@ class MainViewModel : ViewModel() {
                                 aboutWhatsapp = abWhatsapp,
                                 aboutEmail = abEmail,
                                 aboutShareUrl = abShareUrl,
+                                aboutPhoneVisible = abPhoneVis,
+                                aboutWhatsappVisible = abWhatsappVis,
+                                aboutEmailVisible = abEmailVis,
+                                aboutShareUrlVisible = abShareVis,
+                                aboutImageVisible = abImgVis,
                                 adminPassword = admPass,
                                 fontColorHex = fnColHex,
                                 footerFontSizePercent = fFontPercent,
@@ -1130,10 +1145,12 @@ class MainViewModel : ViewModel() {
 
 // --- CORE APP LEVEL ACTIVITY ---
 class MainActivity : ComponentActivity() {
+    private lateinit var vm: MainViewModel
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        vm = MainViewModel()
         setContent {
-            val vm = MainViewModel()
             val settings by vm.settings.collectAsStateWithLifecycle()
             
             LaunchedEffect(settings) {
@@ -1178,6 +1195,22 @@ class MainActivity : ComponentActivity() {
 fun AppNavigationLayout(vm: MainViewModel) {
     val context = LocalContext.current
     var activeTab by remember { mutableIntStateOf(0) }
+    
+    var lastBackPressTime by remember { mutableStateOf(0L) }
+    androidx.activity.compose.BackHandler(enabled = true) {
+        if (activeTab != 0) {
+            activeTab = 0
+        } else {
+            val now = System.currentTimeMillis()
+            if (now - lastBackPressTime < 2000L) {
+                (context as? android.app.Activity)?.finish()
+            } else {
+                lastBackPressTime = now
+                Toast.makeText(context, "اضغط مرة أخرى للخروج من التطبيق", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     var showGeminiAssistant by remember { mutableStateOf(false) }
     val settings by vm.settings.collectAsStateWithLifecycle()
 
@@ -4811,6 +4844,16 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
     var aboutImageUrlVal by remember { mutableStateOf(settings.aboutImageUrl) }
     var footerTextVal by remember { mutableStateOf(settings.footerText) }
 
+    var aboutPhoneVal by remember { mutableStateOf(settings.aboutPhone) }
+    var aboutWhatsappVal by remember { mutableStateOf(settings.aboutWhatsapp) }
+    var aboutEmailVal by remember { mutableStateOf(settings.aboutEmail) }
+    var aboutShareUrlVal by remember { mutableStateOf(settings.aboutShareUrl) }
+    var aboutPhoneVisibleVal by remember { mutableStateOf(settings.aboutPhoneVisible) }
+    var aboutWhatsappVisibleVal by remember { mutableStateOf(settings.aboutWhatsappVisible) }
+    var aboutEmailVisibleVal by remember { mutableStateOf(settings.aboutEmailVisible) }
+    var aboutShareUrlVisibleVal by remember { mutableStateOf(settings.aboutShareUrlVisible) }
+    var aboutImageVisibleVal by remember { mutableStateOf(settings.aboutImageVisible) }
+
     var cSizeValue by remember { mutableFloatStateOf(settings.chatIconSize.toFloat()) }
     var cColField by remember { mutableStateOf(settings.chatIconColorHex) }
     var cHiddenField by remember { mutableStateOf(settings.chatIconHidden) }
@@ -5216,6 +5259,62 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = footerTextVisibleVal, onCheckedChange = { footerTextVisibleVal = it })
                     Text("إظهار نص تذييل الحقوق في أسفل الشاشة الرئيسية", color = Color.White, fontSize = 11.sp)
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+                Text("📞 تخصيص معلومات التواصل بصفحة معلومات التطبيق:", color = AppTheme.accentGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = aboutImageVisibleVal, onCheckedChange = { aboutImageVisibleVal = it })
+                    Text("إظهار صورة غلاف معلومات التطبيق", color = Color.White, fontSize = 11.sp)
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Checkbox(checked = aboutPhoneVisibleVal, onCheckedChange = { aboutPhoneVisibleVal = it })
+                    Spacer(modifier = Modifier.width(4.dp))
+                    OutlinedTextField(
+                        value = aboutPhoneVal,
+                        onValueChange = { aboutPhoneVal = it },
+                        label = { Text("رقم الهاتف للاتصال والشكاوى") },
+                        modifier = Modifier.weight(1f),
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Checkbox(checked = aboutWhatsappVisibleVal, onCheckedChange = { aboutWhatsappVisibleVal = it })
+                    Spacer(modifier = Modifier.width(4.dp))
+                    OutlinedTextField(
+                        value = aboutWhatsappVal,
+                        onValueChange = { aboutWhatsappVal = it },
+                        label = { Text("رقم الواتساب للتواصل والتوثيق") },
+                        modifier = Modifier.weight(1f),
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Checkbox(checked = aboutEmailVisibleVal, onCheckedChange = { aboutEmailVisibleVal = it })
+                    Spacer(modifier = Modifier.width(4.dp))
+                    OutlinedTextField(
+                        value = aboutEmailVal,
+                        onValueChange = { aboutEmailVal = it },
+                        label = { Text("البريد الإلكتروني الرسمي لخدمات اليمن") },
+                        modifier = Modifier.weight(1f),
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Checkbox(checked = aboutShareUrlVisibleVal, onCheckedChange = { aboutShareUrlVisibleVal = it })
+                    Spacer(modifier = Modifier.width(4.dp))
+                    OutlinedTextField(
+                        value = aboutShareUrlVal,
+                        onValueChange = { aboutShareUrlVal = it },
+                        label = { Text("رابط مشاركة التطبيق") },
+                        modifier = Modifier.weight(1f),
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                    )
                 }
             }
         }
