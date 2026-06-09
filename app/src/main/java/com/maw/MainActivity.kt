@@ -499,6 +499,52 @@ class MainViewModel : ViewModel() {
         try {
             firestore = FirebaseFirestore.getInstance()
             firestore?.let { db ->
+                // Initial check and creation of global settings in Firebase Firestore if missing
+                db.collection("settings").document("global").get().addOnSuccessListener { snapshot ->
+                    if (snapshot == null || !snapshot.exists()) {
+                        db.collection("settings").document("global").set(AppSettings())
+                    }
+                }
+
+                // Initial upload of categories, providers, cities and reviews list to newly provisioned Firestore database if completely empty
+                db.collection("categories").get().addOnSuccessListener { snapshot ->
+                    if (snapshot == null || snapshot.isEmpty) {
+                        defaultCategories.forEach { cat ->
+                            db.collection("categories").document(cat.id).set(cat)
+                        }
+                    }
+                }
+
+                db.collection("providers").get().addOnSuccessListener { snapshot ->
+                    if (snapshot == null || snapshot.isEmpty) {
+                        defaultProviders.forEach { prov ->
+                            db.collection("providers").document(prov.id).set(prov)
+                            val rel = ProviderCategoryRelation(
+                                id = "${prov.id}_${prov.category}",
+                                providerId = prov.id,
+                                categoryId = prov.category
+                            )
+                            db.collection("provider_category_relations").document(rel.id).set(rel)
+                        }
+                    }
+                }
+
+                db.collection("cities").get().addOnSuccessListener { snapshot ->
+                    if (snapshot == null || snapshot.isEmpty) {
+                        defaultCities.forEach { city ->
+                            db.collection("cities").document(city.id).set(city)
+                        }
+                    }
+                }
+
+                db.collection("reviews").get().addOnSuccessListener { snapshot ->
+                    if (snapshot == null || snapshot.isEmpty) {
+                        defaultReviews.forEach { review ->
+                            db.collection("reviews").document(review.id).set(review)
+                        }
+                    }
+                }
+
                 // Realtime listen for settings document to broadcast footer/about properties instantly
                 db.collection("settings").document("global")
                     .addSnapshotListener { snapshot, error ->
@@ -598,27 +644,11 @@ class MainViewModel : ViewModel() {
                         }
                     }
 
-                // Initial upload of categories and mapping relationships if available
-                defaultCategories.forEach { cat ->
-                    db.collection("categories").document(cat.id).set(cat)
-                }
-
-                defaultProviders.forEach { prov ->
-                    val rel = ProviderCategoryRelation(
-                        id = "${prov.id}_${prov.category}",
-                        providerId = prov.id,
-                        categoryId = prov.category
-                    )
-                    db.collection("provider_category_relations").document(rel.id).set(rel)
-                }
-
-                // Try synchronization for other active datasets online
+                // Synchronization for active datasets online with complete, non-blocking real-time Snapshot Listeners
                 db.collection("providers").addSnapshotListener { snap, _ ->
                     snap?.let {
                         val list = it.toObjects(Provider::class.java)
-                        if (list.isNotEmpty()) {
-                            _providers.value = list
-                        }
+                        _providers.value = list
                     }
                 }
 
@@ -626,9 +656,15 @@ class MainViewModel : ViewModel() {
                 db.collection("categories").addSnapshotListener { snap, _ ->
                     snap?.let {
                         val list = snap.toObjects(Category::class.java)
-                        if (list.isNotEmpty()) {
-                            _categories.value = list.sortedBy { it.order }
-                        }
+                        _categories.value = list.sortedBy { it.order }
+                    }
+                }
+
+                // Synchronize cities dynamically
+                db.collection("cities").addSnapshotListener { snap, _ ->
+                    snap?.let {
+                        val list = snap.toObjects(City::class.java)
+                        _cities.value = list
                     }
                 }
 
@@ -636,9 +672,7 @@ class MainViewModel : ViewModel() {
                 db.collection("provider_category_relations").addSnapshotListener { snap, _ ->
                     snap?.let {
                         val list = snap.toObjects(ProviderCategoryRelation::class.java)
-                        if (list.isNotEmpty()) {
-                            _relations.value = list
-                        }
+                        _relations.value = list
                     }
                 }
 
@@ -646,9 +680,7 @@ class MainViewModel : ViewModel() {
                 db.collection("reviews").addSnapshotListener { snap, _ ->
                     snap?.let {
                         val list = snap.toObjects(Review::class.java)
-                        if (list.isNotEmpty()) {
-                            _reviews.value = list
-                        }
+                        _reviews.value = list
                     }
                 }
 
@@ -656,9 +688,7 @@ class MainViewModel : ViewModel() {
                 db.collection("banners").addSnapshotListener { snap, _ ->
                     snap?.let {
                         val list = snap.toObjects(Banner::class.java)
-                        if (list.isNotEmpty()) {
-                            _banners.value = list
-                        }
+                        _banners.value = list
                     }
                 }
 
@@ -682,9 +712,7 @@ class MainViewModel : ViewModel() {
                 db.collection("notifications").addSnapshotListener { snap, _ ->
                     snap?.let {
                         val list = snap.toObjects(UserNotification::class.java)
-                        if (list.isNotEmpty()) {
-                            _notifications.value = list.sortedBy { it.timestamp }
-                        }
+                        _notifications.value = list.sortedBy { it.timestamp }
                     }
                 }
 
@@ -692,9 +720,15 @@ class MainViewModel : ViewModel() {
                 db.collection("admins").addSnapshotListener { snap, _ ->
                     snap?.let {
                         val list = snap.toObjects(AdminAccount::class.java)
-                        if (list.isNotEmpty()) {
-                            _adminAccounts.value = list
-                        }
+                        _adminAccounts.value = list
+                    }
+                }
+
+                // Synchronize audit logs dynamically
+                db.collection("audit_logs").addSnapshotListener { snap, _ ->
+                    snap?.let {
+                        val list = snap.toObjects(AuditLog::class.java)
+                        _auditLogs.value = list.sortedByDescending { it.timestamp }
                     }
                 }
             }
@@ -719,6 +753,9 @@ class MainViewModel : ViewModel() {
     fun addAuditLog(admin: String, action: String) {
         val newLog = AuditLog(UUID.randomUUID().toString(), admin, action)
         _auditLogs.value = listOf(newLog) + _auditLogs.value
+        try {
+            firestore?.collection("audit_logs")?.document(newLog.id)?.set(newLog)
+        } catch (e: Exception) {}
     }
 
     // Provider mutations
@@ -885,21 +922,33 @@ class MainViewModel : ViewModel() {
     fun addCategory(cat: Category, admin: String) {
         _categories.value = _categories.value + cat
         addAuditLog(admin, "إضافة فئة خدمة جديدة: ${cat.nameAr}")
+        try {
+            firestore?.collection("categories")?.document(cat.id)?.set(cat)
+        } catch (e: Exception) {}
     }
 
     fun deleteCategory(id: String, admin: String) {
         _categories.value = _categories.value.filter { it.id != id }
         addAuditLog(admin, "حذف فئة الخدمة برقم: $id")
+        try {
+            firestore?.collection("categories")?.document(id)?.delete()
+        } catch (e: Exception) {}
     }
 
     fun addCity(city: City, admin: String) {
         _cities.value = _cities.value + city
         addAuditLog(admin, "إدراج مدينة يمنية مستهدفة جديدة: ${city.nameAr}")
+        try {
+            firestore?.collection("cities")?.document(city.id)?.set(city)
+        } catch (e: Exception) {}
     }
 
     fun deleteCity(id: String, admin: String) {
         _cities.value = _cities.value.filter { it.id != id }
         addAuditLog(admin, "إزالة المدينة المستهدفة ذات الرمز: $id")
+        try {
+            firestore?.collection("cities")?.document(id)?.delete()
+        } catch (e: Exception) {}
     }
 
     // Complaints logic
