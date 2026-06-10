@@ -494,6 +494,7 @@ class MainViewModel : ViewModel() {
 
     val loggedInUsername = MutableStateFlow("")
     val currentChatRoomId = MutableStateFlow<String?>(null)
+    val navigationTargetTab = MutableStateFlow<Int?>(null)
 
     init {
         // Attempt setup listners to Firebase if initialized
@@ -1214,6 +1215,14 @@ fun AppNavigationLayout(vm: MainViewModel) {
     var showGeminiAssistant by remember { mutableStateOf(false) }
     val settings by vm.settings.collectAsStateWithLifecycle()
 
+    val targetTab by vm.navigationTargetTab.collectAsStateWithLifecycle()
+    LaunchedEffect(targetTab) {
+        targetTab?.let {
+            activeTab = it
+            vm.navigationTargetTab.value = null
+        }
+    }
+
     val backdoorPrefs = remember { context.getSharedPreferences("backdoor_prefs", Context.MODE_PRIVATE) }
     var isBackdoorOwnerLoggedIn by remember { mutableStateOf(backdoorPrefs.getBoolean("owner_logged_in", false)) }
     var backdoorClickCount by remember { mutableIntStateOf(0) }
@@ -1371,7 +1380,6 @@ fun AppNavigationLayout(vm: MainViewModel) {
                                 .clickable {
                                     if (loggedAdmin.isEmpty()) {
                                         activeTab = 5
-                                        Toast.makeText(context, "الرجاء تسجيل الدخول أولاً من هنا عبر بوابة الإدارة السريّة", Toast.LENGTH_SHORT).show()
                                     } else {
                                         vm.loggedInUsername.value = ""
                                         Toast.makeText(context, "تم الخروج بنجاح للتصفح العادي", Toast.LENGTH_SHORT).show()
@@ -1381,14 +1389,14 @@ fun AppNavigationLayout(vm: MainViewModel) {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                         Icon(
-                            imageVector = if (loggedAdmin.isNotEmpty()) Icons.Default.AdminPanelSettings else Icons.Default.Person,
+                            imageVector = Icons.Default.AdminPanelSettings,
                             contentDescription = "Admin Switch",
-                            tint = if (loggedAdmin.isNotEmpty()) AppTheme.accentGold else Color.Gray,
+                            tint = AppTheme.accentGold,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = if (loggedAdmin.isNotEmpty()) loggedAdmin else "زائر",
+                            text = if (loggedAdmin.isNotEmpty()) "$loggedAdmin (خروج)" else "الإدارة",
                             color = Color.White,
                             fontSize = 11.sp,
                             fontFamily = currentFont
@@ -2363,6 +2371,7 @@ fun ProfessionalCardRow(
                 Button(
                     onClick = {
                         vm.startChatWithProvider("user_visitor", provider.id, provider.name)
+                        vm.navigationTargetTab.value = 2
                         Toast.makeText(context, "تم فتح نافذة الاتصال الآمن مع غرف ${provider.name}", Toast.LENGTH_SHORT).show()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F2225)),
@@ -2976,6 +2985,7 @@ fun MockMapViewScreen(vm: MainViewModel) {
                         Button(
                             onClick = {
                                 vm.startChatWithProvider("user_visitor", p.id, p.name)
+                                vm.navigationTargetTab.value = 2
                                 Toast.makeText(context, "تم فتح غرفة الاتصال الفوري المباشر", Toast.LENGTH_SHORT).show()
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F2225)),
