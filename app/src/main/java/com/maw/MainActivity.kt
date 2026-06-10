@@ -36,6 +36,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -125,7 +126,9 @@ data class PendingProvider(
     val phone: String = "",
     val description: String = "",
     val area: String = "",
-    val deviceId: String = ""
+    val deviceId: String = "",
+    val selfieImageBase64: String = "",
+    val isFemale: Boolean = false
 )
 
 @Serializable
@@ -792,7 +795,8 @@ class MainViewModel : ViewModel() {
             description = pp.description,
             area = pp.area,
             isVerified = true,
-            deviceId = pp.deviceId
+            deviceId = pp.deviceId,
+            imageUrl = pp.selfieImageBase64
         )
         _providers.value = _providers.value + newP
         _pendingRequests.value = _pendingRequests.value.filter { it.id != pp.id }
@@ -2012,6 +2016,103 @@ fun AppNavigationLayout(vm: MainViewModel) {
     }
 }
 
+fun compressImageBase64(context: Context, uri: Uri, maxWidth: Int = 400, maxHeight: Int = 400, quality: Int = 75): String {
+    return try {
+        val inputStream = context.contentResolver.openInputStream(uri)
+        val originalBitmap = BitmapFactory.decodeStream(inputStream)
+        if (originalBitmap == null) return ""
+        
+        val width = originalBitmap.width
+        val height = originalBitmap.height
+        val ratio = width.toFloat() / height.toFloat()
+        
+        var targetWidth = width
+        var targetHeight = height
+        if (width > maxWidth || height > maxHeight) {
+            if (ratio > 1f) {
+                targetWidth = maxWidth
+                targetHeight = (maxWidth / ratio).toInt()
+            } else {
+                targetHeight = maxHeight
+                targetWidth = (maxHeight * ratio).toInt()
+            }
+        }
+        
+        val scaledBitmap = Bitmap.createScaledBitmap(originalBitmap, targetWidth, targetHeight, true)
+        val outputStream = ByteArrayOutputStream()
+        scaledBitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
+        val bytes = outputStream.toByteArray()
+        Base64.encodeToString(bytes, Base64.DEFAULT)
+    } catch (e: Exception) {
+        ""
+    }
+}
+
+fun compressBitmapBase64(bitmap: Bitmap, maxWidth: Int = 400, maxHeight: Int = 400, quality: Int = 75): String {
+    return try {
+        val width = bitmap.width
+        val height = bitmap.height
+        val ratio = width.toFloat() / height.toFloat()
+        
+        var targetWidth = width
+        var targetHeight = height
+        if (width > maxWidth || height > maxHeight) {
+            if (ratio > 1f) {
+                targetWidth = maxWidth
+                targetHeight = (maxWidth / ratio).toInt()
+            } else {
+                targetHeight = maxHeight
+                targetWidth = (maxHeight * ratio).toInt()
+            }
+        }
+        
+        val scaledBitmap = Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true)
+        val outputStream = ByteArrayOutputStream()
+        scaledBitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
+        val bytes = outputStream.toByteArray()
+        Base64.encodeToString(bytes, Base64.DEFAULT)
+    } catch (e: Exception) {
+        ""
+    }
+}
+
+@Composable
+fun rememberBase64Bitmap(base64String: String?): Bitmap? {
+    if (base64String.isNullOrBlank()) return null
+    return remember(base64String) {
+        try {
+            val clean = if (base64String.contains("base64,")) {
+                base64String.substringAfter("base64,")
+            } else {
+                base64String
+            }.trim()
+            val decodedBytes = Base64.decode(clean, Base64.DEFAULT)
+            BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
+        } catch (e: Exception) {
+            null
+        }
+    }
+}
+
+@Composable
+fun CategoryIconOrImage(iconUrl: String, modifier: Modifier = Modifier, iconSize: Int = 16) {
+    if (iconUrl.startsWith("http://") || iconUrl.startsWith("https://") || iconUrl.startsWith("data:image/") || iconUrl.length > 5) {
+        val base64Bitmap = rememberBase64Bitmap(iconUrl)
+        AsyncImage(
+            model = base64Bitmap ?: iconUrl,
+            contentDescription = "Category Pic",
+            modifier = modifier.size(iconSize.dp).clip(RoundedCornerShape(4.dp)),
+            contentScale = ContentScale.Crop
+        )
+    } else {
+        Text(
+            text = if (iconUrl.isBlank()) "🛠️" else iconUrl,
+            fontSize = iconSize.sp,
+            modifier = modifier
+        )
+    }
+}
+
 // --- TAB 0: DIRECTORY & SEARCH ---
 @Composable
 fun DirectoryScreen(vm: MainViewModel) {
@@ -2029,10 +2130,24 @@ fun ProfessionalCategoryFilterComponent(
     val categories by vm.categoriesState.collectAsStateWithLifecycle()
     val cities by vm.citiesState.collectAsStateWithLifecycle()
     val reviews by vm.reviewsState.collectAsStateWithLifecycle()
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     var selectedCategoryId by remember { mutableStateOf("") }
     var selectedCityId by remember { mutableStateOf("") }
     var searchTxt by remember { mutableStateOf("") }
+
+    val voiceSpeechLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val resData = result.data
+            val spokenMatches = resData?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            if (!spokenMatches.isNullOrEmpty()) {
+                searchTxt = spokenMatches[0]
+            }
+        }
+    }
 
     // Dialog for rating/evaluation
     var ratingProviderTarget by remember { mutableStateOf<Provider?>(null) }
@@ -2045,53 +2160,134 @@ fun ProfessionalCategoryFilterComponent(
             .background(AppTheme.darkBg)
             .padding(12.dp)
     ) {
-        // Category Pill Selector
-        Text(
-            text = "📂 تصفح الكوادر المهنية حسب القسم الرئيسي:",
-            color = Color.White,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = fontFamily,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)
-        )
-
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 10.dp)
-        ) {
-            item {
-                FilterChip(
-                    selected = selectedCategoryId.isEmpty(),
-                    onClick = { selectedCategoryId = "" },
-                    label = { Text("الكل / All", fontSize = 11.sp, fontFamily = fontFamily) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = AppTheme.primaryRed,
-                        selectedLabelColor = Color.White,
-                        containerColor = AppTheme.surfaceDark,
-                        labelColor = Color.White
-                    ),
-                    modifier = Modifier.testTag("filter_all_categories")
-                )
-            }
-            items(categories) { cat ->
-                FilterChip(
-                    selected = selectedCategoryId == cat.id,
-                    onClick = { selectedCategoryId = cat.id },
-                    label = { Text("${cat.iconUrl} ${cat.nameAr}", fontSize = 11.sp, fontFamily = fontFamily) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = AppTheme.primaryRed,
-                        selectedLabelColor = Color.White,
-                        containerColor = AppTheme.surfaceDark,
-                        labelColor = Color.White
-                    ),
-                    modifier = Modifier.testTag("filter_category_${cat.id}")
-                )
+        // Warning Banner if Chat is Disabled
+        if (!settings.isChatEnabled) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = AppTheme.primaryRed.copy(alpha = 0.95f)),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 10.dp),
+                border = BorderStroke(1.2.dp, AppTheme.accentGold)
+            ) {
+                Row(
+                    modifier = Modifier.padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Warning, contentDescription = "Warning", tint = Color.White, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            "💬 تنبيه من الإدارة: تم إيقاف المحادثة الفورية",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            fontFamily = fontFamily
+                        )
+                        Text(
+                            settings.chatDisabledMessage,
+                            color = Color.White,
+                            fontSize = 9.sp,
+                            fontFamily = fontFamily,
+                            lineHeight = 12.sp
+                        )
+                    }
+                }
             }
         }
 
-        // Active filter status
+        // Stunning Categories Grid
+        val rootCategories = categories.filter { it.parentId.isEmpty() }
+            .sortedWith(compareByDescending<Category> { it.isPinned }.thenBy { it.order })
+
+        if (rootCategories.isNotEmpty()) {
+            Text(
+                text = "🛠️ تصنيفات المهن والحرف الرئيسية:",
+                color = AppTheme.accentGold,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = fontFamily,
+                modifier = Modifier.padding(bottom = 6.dp, start = 4.dp)
+            )
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+            ) {
+                items(rootCategories) { cat ->
+                    val isSelected = selectedCategoryId == cat.id
+                    Card(
+                        modifier = Modifier
+                            .width(110.dp)
+                            .height(82.dp)
+                            .clickable { selectedCategoryId = if (isSelected) "" else cat.id },
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isSelected) AppTheme.primaryRed else AppTheme.surfaceDark
+                        ),
+                        border = if (isSelected) BorderStroke(1.5.dp, AppTheme.accentGold) else BorderStroke(1.dp, Color(0xFF223639))
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxSize().padding(6.dp),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            CategoryIconOrImage(cat.iconUrl, iconSize = 22)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = cat.nameAr,
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = fontFamily,
+                                textAlign = TextAlign.Center,
+                                maxLines = 1
+                            )
+                            if (cat.isPinned) {
+                                Text("📌 مثبت", color = AppTheme.accentGold, fontSize = 7.sp, fontFamily = fontFamily)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Expand Subcategories list dynamically
+        val activeSubcategories = categories.filter { it.parentId == selectedCategoryId && it.parentId.isNotEmpty() }
+        if (selectedCategoryId.isNotEmpty() && activeSubcategories.isNotEmpty()) {
+            Text(
+                text = "↳ الأقسام الفرعية المتفرعة للقسم الحالي:",
+                color = Color.LightGray,
+                fontSize = 11.sp,
+                fontFamily = fontFamily,
+                modifier = Modifier.padding(bottom = 6.dp, start = 8.dp)
+            )
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
+            ) {
+                items(activeSubcategories) { sub ->
+                    val isSelectedSub = selectedCategoryId == sub.id
+                    FilterChip(
+                        selected = isSelectedSub,
+                        onClick = { selectedCategoryId = sub.id },
+                        label = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CategoryIconOrImage(sub.iconUrl, iconSize = 12)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(sub.nameAr, fontSize = 10.sp, fontFamily = fontFamily)
+                            }
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = AppTheme.primaryRed,
+                            selectedLabelColor = Color.White,
+                            containerColor = Color(0xFF0F2225),
+                            labelColor = Color.LightGray
+                        )
+                    )
+                }
+            }
+        }
+
+        // Active selection banner indicator
         if (selectedCategoryId.isNotEmpty()) {
             val catObj = categories.find { it.id == selectedCategoryId }
             catObj?.let {
@@ -2105,12 +2301,16 @@ fun ProfessionalCategoryFilterComponent(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "جاري تصفية القسم: ${it.iconUrl} ${it.nameAr}",
-                        color = AppTheme.accentGold,
-                        fontSize = 11.sp,
-                        fontFamily = fontFamily
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CategoryIconOrImage(it.iconUrl, iconSize = 13)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "جاري تصفية القسم: ${it.nameAr}",
+                            color = AppTheme.accentGold,
+                            fontSize = 11.sp,
+                            fontFamily = fontFamily
+                        )
+                    }
                     TextButton(
                         onClick = { selectedCategoryId = "" },
                         contentPadding = PaddingValues(0.dp),
@@ -2122,7 +2322,7 @@ fun ProfessionalCategoryFilterComponent(
             }
         }
 
-        // Search input & city selector
+        // Search inputs & Voice speech trigger
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2133,7 +2333,7 @@ fun ProfessionalCategoryFilterComponent(
             OutlinedTextField(
                 value = searchTxt,
                 onValueChange = { searchTxt = it },
-                placeholder = { Text("ابحث عن فني، كهربائي، مبرمج...", color = Color.Gray, fontSize = 11.sp) },
+                placeholder = { Text("ابحث بالاسم، المهنة، الرقم، المنطقة، المدينة...", color = Color.Gray, fontSize = 10.sp) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = AppTheme.accentGold, modifier = Modifier.size(16.dp)) },
                 modifier = Modifier.weight(1f),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -2147,6 +2347,30 @@ fun ProfessionalCategoryFilterComponent(
                 shape = RoundedCornerShape(8.dp),
                 singleLine = true
             )
+
+            if (settings.isWebSpeechEnabled) {
+                IconButton(
+                    onClick = {
+                        val speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ar-YE")
+                            putExtra(RecognizerIntent.EXTRA_PROMPT, "تحدث للبحث...")
+                        }
+                        try {
+                            voiceSpeechLauncher.launch(speechIntent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "البحث الصوتي غير مدعوم على جهازك", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(AppTheme.surfaceDark)
+                        .border(1.dp, Color(0xFF223639), RoundedCornerShape(8.dp))
+                ) {
+                    Icon(Icons.Default.Mic, contentDescription = "Voice Search", tint = AppTheme.accentGold)
+                }
+            }
 
             // Dynamic City filter trigger
             Box {
@@ -2185,12 +2409,34 @@ fun ProfessionalCategoryFilterComponent(
             }
         }
 
-        // List of filtered professionals
-        val listFiltered = providers.filter {
-            val matchCat = selectedCategoryId.isEmpty() || it.category == selectedCategoryId
-            val matchCity = selectedCityId.isEmpty() || it.city == selectedCityId
-            val matchQuery = searchTxt.isEmpty() || it.name.contains(searchTxt, ignoreCase = true) || it.description.contains(searchTxt, ignoreCase = true)
-            matchCat && matchCity && matchQuery && it.isVerified
+        // List of filtered professionals with highly robust query criteria
+        val listFiltered = providers.filter { itPro ->
+            val matchCat = selectedCategoryId.isEmpty() ||
+                           itPro.category == selectedCategoryId ||
+                           categories.find { it.id == itPro.category }?.parentId == selectedCategoryId
+            val matchCity = selectedCityId.isEmpty() || itPro.city == selectedCityId
+            
+            val matchQuery = if (searchTxt.isEmpty()) {
+                true
+            } else {
+                val catObj = categories.find { it.id == itPro.category }
+                val catNameAr = catObj?.nameAr ?: ""
+                val catNameEn = catObj?.nameEn ?: ""
+                
+                val cityObj = cities.find { it.id == itPro.city }
+                val cityNameAr = cityObj?.nameAr ?: ""
+                val cityNameEn = cityObj?.nameEn ?: ""
+                
+                itPro.name.contains(searchTxt, ignoreCase = true) ||
+                itPro.phone.contains(searchTxt) ||
+                itPro.area.contains(searchTxt, ignoreCase = true) ||
+                itPro.description.contains(searchTxt, ignoreCase = true) ||
+                catNameAr.contains(searchTxt, ignoreCase = true) ||
+                catNameEn.contains(searchTxt, ignoreCase = true) ||
+                cityNameAr.contains(searchTxt, ignoreCase = true) ||
+                cityNameEn.contains(searchTxt, ignoreCase = true)
+            }
+            matchCat && matchCity && matchQuery && itPro.isVerified
         }
 
         if (listFiltered.isEmpty()) {
@@ -2370,9 +2616,14 @@ fun ProfessionalCardRow(
 
                 Button(
                     onClick = {
-                        vm.startChatWithProvider("user_visitor", provider.id, provider.name)
-                        vm.navigationTargetTab.value = 2
-                        Toast.makeText(context, "تم فتح نافذة الاتصال الآمن مع غرف ${provider.name}", Toast.LENGTH_SHORT).show()
+                        val currentSettings = vm.settings.value
+                        if (!currentSettings.isChatEnabled) {
+                            Toast.makeText(context, "🚫 ${currentSettings.chatDisabledMessage}", Toast.LENGTH_LONG).show()
+                        } else {
+                            vm.startChatWithProvider("user_visitor", provider.id, provider.name)
+                            vm.navigationTargetTab.value = 2
+                            Toast.makeText(context, "تم فتح نافذة الاتصال الآمن مع غرف ${provider.name}", Toast.LENGTH_SHORT).show()
+                        }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F2225)),
                     modifier = Modifier.weight(1.2f).height(36.dp)
@@ -2984,9 +3235,14 @@ fun MockMapViewScreen(vm: MainViewModel) {
                     ) {
                         Button(
                             onClick = {
-                                vm.startChatWithProvider("user_visitor", p.id, p.name)
-                                vm.navigationTargetTab.value = 2
-                                Toast.makeText(context, "تم فتح غرفة الاتصال الفوري المباشر", Toast.LENGTH_SHORT).show()
+                                val currentSettings = vm.settings.value
+                                if (!currentSettings.isChatEnabled) {
+                                    Toast.makeText(context, "🚫 ${currentSettings.chatDisabledMessage}", Toast.LENGTH_LONG).show()
+                                } else {
+                                    vm.startChatWithProvider("user_visitor", p.id, p.name)
+                                    vm.navigationTargetTab.value = 2
+                                    Toast.makeText(context, "تم فتح غرفة الاتصال الفوري المباشر", Toast.LENGTH_SHORT).show()
+                                }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F2225)),
                             modifier = Modifier.weight(1f).height(34.dp).border(1.dp, AppTheme.accentGold, RoundedCornerShape(6.dp)),
@@ -3129,8 +3385,51 @@ fun DirectChatScreen(vm: MainViewModel, fontFamily: FontFamily, fontColor: Color
     val chats by vm.chats.collectAsStateWithLifecycle()
     val messages by vm.chatMessages.collectAsStateWithLifecycle()
     val activeRoomId by vm.currentChatRoomId.collectAsStateWithLifecycle()
+    val settings by vm.settings.collectAsStateWithLifecycle()
 
-    if (activeRoomId != null) {
+    if (!settings.isChatEnabled) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(AppTheme.darkBg)
+                .padding(20.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(CircleShape)
+                    .background(AppTheme.primaryRed.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Chat,
+                    contentDescription = "Chat Disabled",
+                    tint = AppTheme.primaryRed,
+                    modifier = Modifier.size(40.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "💬 خدمة المحادثة الفورية معطلة حالياً",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                fontFamily = fontFamily,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = settings.chatDisabledMessage,
+                color = AppTheme.grayText,
+                fontSize = 12.sp,
+                fontFamily = fontFamily,
+                textAlign = TextAlign.Center,
+                lineHeight = 18.sp
+            )
+        }
+    } else if (activeRoomId != null) {
         // RENDER ACTIVE CHAT CONVERSATION SCREEN
         ConversationScreen(vm = vm, chatId = activeRoomId!!, fontFamily = fontFamily, fontColor = fontColor)
     } else {
@@ -3333,9 +3632,34 @@ fun JoinApplicationScreen(vm: MainViewModel) {
     var selectedCatId by remember { mutableStateOf("plumbing") }
     var selectedCityId by remember { mutableStateOf("sanaa") }
 
+    var selfieBase64 by remember { mutableStateOf("") }
+    var isFemaleGender by remember { mutableStateOf(false) }
+
     val categories by vm.categoriesState.collectAsStateWithLifecycle()
     val cities by vm.citiesState.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
+
+    val fontFamily = resolveAppFontFamily(settings.selectedFontName)
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            val compressed = compressImageBase64(context, it, maxWidth = 320, maxHeight = 320, quality = 70)
+            selfieBase64 = compressed
+            Toast.makeText(context, "تم اختيار صورة وضغطها تلقائياً للمحافظة على باقة الإنترنت 🖼️", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap: Bitmap? ->
+        bitmap?.let {
+            val compressed = compressBitmapBase64(it, maxWidth = 320, maxHeight = 320, quality = 70)
+            selfieBase64 = compressed
+            Toast.makeText(context, "تم التقاط وضغط صورة السيلفي بنجاح عبر الكاميرا 📷", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -3391,9 +3715,43 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
                         focusedBorderColor = AppTheme.accentGold
-                    )
+                    ),
+                    textStyle = TextStyle(fontFamily = fontFamily)
                 )
                 Spacer(modifier = Modifier.height(10.dp))
+
+                // GENDER CHOOSER SELECTOR
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
+                ) {
+                    Text("جنس المتقدم الحالي: ", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = fontFamily)
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Row(
+                        modifier = Modifier.clickable { isFemaleGender = false },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = !isFemaleGender, 
+                            onClick = { isFemaleGender = false },
+                            colors = RadioButtonDefaults.colors(selectedColor = AppTheme.accentGold)
+                        )
+                        Text("ذكر 👨", color = Color.White, fontSize = 11.sp, fontFamily = fontFamily)
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Row(
+                        modifier = Modifier.clickable { isFemaleGender = true },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = isFemaleGender, 
+                            onClick = { isFemaleGender = true },
+                            colors = RadioButtonDefaults.colors(selectedColor = AppTheme.accentGold)
+                        )
+                        Text("أنثى 👩", color = Color.White, fontSize = 11.sp, fontFamily = fontFamily)
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
 
                 OutlinedTextField(
                     value = phone,
@@ -3404,7 +3762,8 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
                         focusedBorderColor = AppTheme.accentGold
-                    )
+                    ),
+                    textStyle = TextStyle(fontFamily = fontFamily)
                 )
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -3417,7 +3776,8 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
                         focusedBorderColor = AppTheme.accentGold
-                    )
+                    ),
+                    textStyle = TextStyle(fontFamily = fontFamily)
                 )
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -3430,7 +3790,8 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
                         focusedBorderColor = AppTheme.accentGold
-                    )
+                    ),
+                    textStyle = TextStyle(fontFamily = fontFamily)
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -3445,7 +3806,13 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                         FilterChip(
                             selected = selectedCatId == cat.id,
                             onClick = { selectedCatId = cat.id },
-                            label = { Text("${cat.iconUrl} ${cat.nameAr}", fontSize = 10.sp) },
+                            label = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    CategoryIconOrImage(cat.iconUrl, iconSize = 12)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(cat.nameAr, fontSize = 10.sp)
+                                }
+                            },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = AppTheme.primaryRed,
                                 selectedLabelColor = Color.White,
@@ -3479,10 +3846,93 @@ fun JoinApplicationScreen(vm: MainViewModel) {
 
                 Spacer(modifier = Modifier.height(14.dp))
 
+                // --- PHOTO CAPTURE & SELECT FIELD ---
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFF0F2225))
+                        .border(1.dp, Color(0xFF223639), RoundedCornerShape(8.dp))
+                        .padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = if (isFemaleGender) "🛠️ يرجى رفع صورة ترمز لمهنتك/حرفتك (أو صورة شخصية اختيارية):" else "📷 يرجى التقاط صورتك الشخصية السيلفي مباشرة كشرط أساسي لتوثيق الحساب:",
+                        color = AppTheme.accentGold,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = fontFamily
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { cameraLauncher.launch(null) },
+                            colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
+                            modifier = Modifier.weight(1.2f).height(38.dp),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Icon(Icons.Default.CameraAlt, contentDescription = "Camera", modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("فتح الكاميرا سيلفي 📷", fontSize = 9.sp, fontFamily = fontFamily)
+                        }
+
+                        Button(
+                            onClick = { galleryLauncher.launch("image/*") },
+                            colors = ButtonDefaults.buttonColors(containerColor = AppTheme.surfaceDark),
+                            modifier = Modifier.weight(1f).height(38.dp).border(1.dp, Color(0xFF223639), RoundedCornerShape(6.dp)),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Icon(Icons.Default.PhotoLibrary, contentDescription = "Gallery", modifier = Modifier.size(14.dp), tint = AppTheme.accentGold)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("اختر من الاستوديو 🖼️", fontSize = 9.sp, color = Color.White, fontFamily = fontFamily)
+                        }
+                    }
+
+                    if (selfieBase64.isNotEmpty()) {
+                        val previewBitmap = rememberBase64Bitmap(selfieBase64)
+                        previewBitmap?.let {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Card(
+                                    modifier = Modifier.size(80.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    border = BorderStroke(1.5.dp, AppTheme.accentGold)
+                                ) {
+                                    Image(
+                                        bitmap = it.asImageBitmap(),
+                                        contentDescription = "Preview Image",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text("تم تحميل الصورة بنجاح ✅", color = AppTheme.lightGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = fontFamily)
+                                    Text("مع ضغط فوري لتخفيف حجم البيانات سحابياً", color = AppTheme.grayText, fontSize = 8.sp, fontFamily = fontFamily)
+                                    TextButton(onClick = { selfieBase64 = "" }) {
+                                        Text("إزالة الصورة ❌", color = AppTheme.primaryRed, fontSize = 9.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
                 Button(
                     onClick = {
                         if (name.isBlank() || phone.isBlank() || area.isBlank() || description.isBlank()) {
                             Toast.makeText(context, "الرجاء تعبئة كامل الحقول للمراجعة والدراسة", Toast.LENGTH_SHORT).show()
+                        } else if (selfieBase64.isBlank()) {
+                            val alertMessage = if (isFemaleGender) "الرجاء تحديد/تحميل صورة ترمز لمهنتك وحرفتك لتسهيل التعرف عليها بواسطة عملائك!" else "الرجاء التقاط صورتك السيلفي فورياً أو اختيارها من الذاكرة كشرط إلزامي للتوثيق والاعتماد!"
+                            Toast.makeText(context, alertMessage, Toast.LENGTH_LONG).show()
                         } else {
                             val newRequest = PendingProvider(
                                 id = UUID.randomUUID().toString(),
@@ -3492,20 +3942,23 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                                 phone = phone,
                                 description = description,
                                 area = area,
-                                deviceId = "device_${UUID.randomUUID().toString().take(4)}"
+                                deviceId = "device_${UUID.randomUUID().toString().take(4)}",
+                                selfieImageBase64 = selfieBase64,
+                                isFemale = isFemaleGender
                             )
                             vm.registerPendingProvider(newRequest)
                             name = ""
                             phone = ""
                             area = ""
                             description = ""
+                            selfieBase64 = ""
                             Toast.makeText(context, "تم رفع وتخزين طلب تسجيلك بنجاح! جاري معالجة طلبك وقبوله بواسطة الإدارة خلال دقائق.", Toast.LENGTH_LONG).show()
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed)
                 ) {
-                    Text("رفع مستندات وتأكيد الطلب", color = Color.White)
+                    Text("رفع مستندات وتأكيد الطلب 📥", color = Color.White, fontFamily = fontFamily)
                 }
             }
         }
@@ -3775,7 +4228,7 @@ fun AdminSettingsScreen(vm: MainViewModel) {
                         0 -> PendingRequestsTab(vm = vm, list = pendingRequests)
                         1 -> ManualAddProviderTab(vm = vm)
                         2 -> AdsAndBannersTab(vm = vm, banners = banners)
-                        3 -> CategoriesCitiesTab(vm = vm, categories = categories, cities = cities)
+                        3 -> CategoriesCitiesTab(vm = vm, categories = categories, cities = cities, fontFamily = currentFont)
                         4 -> ComplaintsAndReportsTab(vm = vm, list = reports)
                         5 -> PrivacyAndChatLogsTab(vm = vm)
                         6 -> ActiveProvidersTab(vm = vm, providers = providers)
@@ -4196,7 +4649,7 @@ fun AdsAndBannersTab(vm: MainViewModel, banners: List<Banner>) {
 
 // --- SUB-TAB 3: CATEGORIES AND CITIES MANAGEMENT ---
 @Composable
-fun CategoriesCitiesTab(vm: MainViewModel, categories: List<Category>, cities: List<City>) {
+fun CategoriesCitiesTab(vm: MainViewModel, categories: List<Category>, cities: List<City>, fontFamily: FontFamily) {
     val context = LocalContext.current
     var tabIndex by remember { mutableIntStateOf(0) }
 
@@ -4208,26 +4661,66 @@ fun CategoriesCitiesTab(vm: MainViewModel, categories: List<Category>, cities: L
     var displayDirectlyCheck by remember { mutableStateOf(true) }
     var pinCategoryCheck by remember { mutableStateOf(false) }
 
+    var editingCategory by remember { mutableStateOf<Category?>(null) }
+
+    val catImagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            val compressed = compressImageBase64(context, it, maxWidth = 120, maxHeight = 120, quality = 80)
+            catIconSim = compressed
+            Toast.makeText(context, "تم تحميل وضغط صورة القسم الرمزية بنجاح! 🎨", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     var cityNameAr by remember { mutableStateOf("") }
     var cityNameEn by remember { mutableStateOf("") }
 
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(modifier = Modifier.fillMaxWidth()) {
-            Tab(selected = tabIndex == 0, onClick = { tabIndex = 0 }, text = { Text("الأقسام (Main & Sub)", color = Color.White, fontSize = 11.sp) })
-            Tab(selected = tabIndex == 1, onClick = { tabIndex = 1 }, text = { Text("المدن والمحافظات", color = Color.White, fontSize = 11.sp) })
+            Tab(selected = tabIndex == 0, onClick = { tabIndex = 0 }, text = { Text("الأقسام (Main & Sub)", color = Color.White, fontSize = 11.sp, fontFamily = fontFamily) })
+            Tab(selected = tabIndex == 1, onClick = { tabIndex = 1 }, text = { Text("المدن والمحافظات", color = Color.White, fontSize = 11.sp, fontFamily = fontFamily) })
         }
 
         if (tabIndex == 0) {
             Card(colors = CardDefaults.cardColors(containerColor = AppTheme.surfaceDark)) {
                 Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("🔧 إضافة/تعديل قسم خدمات حرفي رئيسي أو فرعي", color = AppTheme.accentGold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text(
+                        text = if (editingCategory != null) "✏️ تعديل القسم النشط: ${editingCategory!!.nameAr}" else "🔧 إضافة قسم خدمات حرفي جديد (رئيسي أو فرعي)", 
+                        color = AppTheme.accentGold, 
+                        fontWeight = FontWeight.Bold, 
+                        fontSize = 12.sp,
+                        fontFamily = fontFamily
+                    )
+
+                    if (editingCategory != null) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("وضع التعديل نشط حالياً", color = AppTheme.lightGreen, fontSize = 10.sp, fontFamily = fontFamily)
+                            TextButton(onClick = {
+                                editingCategory = null
+                                catNameAr = ""
+                                catNameEn = ""
+                                catDescAr = ""
+                                catIconSim = "🛠️"
+                                parentCatIdSelected = ""
+                                pinCategoryCheck = false
+                            }) {
+                                Text("إلغاء وضع التعديل ❌", color = AppTheme.primaryRed, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = fontFamily)
+                            }
+                        }
+                    }
 
                     OutlinedTextField(
                         value = catNameAr,
                         onValueChange = { catNameAr = it },
                         label = { Text("اسم القسم بالعربية") },
                         modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                        textStyle = TextStyle(fontFamily = fontFamily)
                     )
 
                     OutlinedTextField(
@@ -4235,7 +4728,8 @@ fun CategoriesCitiesTab(vm: MainViewModel, categories: List<Category>, cities: L
                         onValueChange = { catNameEn = it },
                         label = { Text("اسم القسم بالإنجليزية") },
                         modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                        textStyle = TextStyle(fontFamily = fontFamily)
                     )
 
                     OutlinedTextField(
@@ -4243,18 +4737,46 @@ fun CategoriesCitiesTab(vm: MainViewModel, categories: List<Category>, cities: L
                         onValueChange = { catDescAr = it },
                         label = { Text("الوصف التعريفي للجمهور") },
                         modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                        textStyle = TextStyle(fontFamily = fontFamily)
                     )
 
-                    OutlinedTextField(
-                        value = catIconSim,
-                        onValueChange = { catIconSim = it },
-                        label = { Text("أيقونة القسم التعبيرية أو رمز Emoji") },
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
-                    )
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = catIconSim,
+                            onValueChange = { catIconSim = it },
+                            label = { Text("أيقونة الـ Emoji أو رمز الصورة الرمزية") },
+                            modifier = Modifier.weight(1f),
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                            textStyle = TextStyle(fontFamily = fontFamily)
+                        )
 
-                    Text("تبعية القسم (لإنشاء قسم فرعي):", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Button(
+                            onClick = { catImagePicker.launch("image/*") },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F2225)),
+                            modifier = Modifier.height(56.dp).border(1.dp, Color(0xFF223639), RoundedCornerShape(4.dp)),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text("رفع صورة 🖼️", fontSize = 10.sp, color = AppTheme.accentGold, fontFamily = fontFamily)
+                        }
+
+                        // Preview Category Icon/Image
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFF0F2225)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CategoryIconOrImage(catIconSim, iconSize = 24)
+                        }
+                    }
+
+                    Text("تبعية القسم (لإنشاء قسم فرعي):", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = fontFamily)
                     var showParentsDropdown by remember { mutableStateOf(false) }
                     Box(modifier = Modifier.fillMaxWidth()) {
                         Button(
@@ -4263,7 +4785,7 @@ fun CategoriesCitiesTab(vm: MainViewModel, categories: List<Category>, cities: L
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             val parentText = if (parentCatIdSelected.isEmpty()) "قسم رئيسي مستقل" else categories.find { it.id == parentCatIdSelected }?.nameAr ?: "مستقل"
-                            Text(parentText, color = AppTheme.accentGold, fontSize = 11.sp)
+                            Text(parentText, color = AppTheme.accentGold, fontSize = 11.sp, fontFamily = fontFamily)
                         }
                         DropdownMenu(
                             expanded = showParentsDropdown,
@@ -4271,7 +4793,7 @@ fun CategoriesCitiesTab(vm: MainViewModel, categories: List<Category>, cities: L
                             modifier = Modifier.background(AppTheme.surfaceDark).fillMaxWidth(0.85f)
                         ) {
                             DropdownMenuItem(
-                                text = { Text("قسم رئيسي مستقل (أب)", color = Color.White, fontSize = 11.sp) },
+                                text = { Text("قسم رئيسي مستقل (أب)", color = Color.White, fontSize = 11.sp, fontFamily = fontFamily) },
                                 onClick = {
                                     parentCatIdSelected = ""
                                     showParentsDropdown = false
@@ -4279,7 +4801,7 @@ fun CategoriesCitiesTab(vm: MainViewModel, categories: List<Category>, cities: L
                             )
                             categories.filter { it.parentId.isEmpty() }.forEach { parentCat ->
                                 DropdownMenuItem(
-                                    text = { Text(parentCat.nameAr, color = Color.White, fontSize = 11.sp) },
+                                    text = { Text(parentCat.nameAr, color = Color.White, fontSize = 11.sp, fontFamily = fontFamily) },
                                     onClick = {
                                         parentCatIdSelected = parentCat.id
                                         showParentsDropdown = false
@@ -4291,12 +4813,12 @@ fun CategoriesCitiesTab(vm: MainViewModel, categories: List<Category>, cities: L
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = displayDirectlyCheck, onCheckedChange = { displayDirectlyCheck = it })
-                        Text("إدراج القسم المضاف مباشرة للتصفح", color = Color.White, fontSize = 11.sp)
+                        Text("إدراج القسم مباشرة للتصفح والبحث", color = Color.White, fontSize = 11.sp, fontFamily = fontFamily)
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = pinCategoryCheck, onCheckedChange = { pinCategoryCheck = it })
-                        Text("تثبيت هذا القسم بالمقدمة 📌", color = Color.White, fontSize = 11.sp)
+                        Text("تثبيت هذا القسم بالمقدمة 📌", color = Color.White, fontSize = 11.sp, fontFamily = fontFamily)
                     }
 
                     Button(
@@ -4304,66 +4826,122 @@ fun CategoriesCitiesTab(vm: MainViewModel, categories: List<Category>, cities: L
                             if (catNameAr.isBlank()) {
                                 Toast.makeText(context, "الرجاء كتابة اسم القسم باللغة العربية", Toast.LENGTH_SHORT).show()
                             } else {
-                                val cleanId = catNameAr.lowercase().replace(" ", "_")
-                                val nCategory = Category(
-                                    id = cleanId,
-                                    nameAr = catNameAr,
-                                    nameEn = catNameEn,
-                                    iconUrl = catIconSim,
-                                    order = if (pinCategoryCheck) 0 else 5,
-                                    parentId = parentCatIdSelected,
-                                    description = catDescAr,
-                                    isPinned = pinCategoryCheck,
-                                    isPublished = displayDirectlyCheck
-                                )
-                                vm.addCategory(nCategory, "الأدمن")
-                                Toast.makeText(context, "تم حفظ وقبول القسم المهني المطور بنجاح سحابياً!", Toast.LENGTH_SHORT).show()
+                                if (editingCategory != null) {
+                                    val updatedCat = Category(
+                                        id = editingCategory!!.id,
+                                        nameAr = catNameAr,
+                                        nameEn = catNameEn,
+                                        iconUrl = catIconSim,
+                                        order = if (pinCategoryCheck) 0 else 5,
+                                        parentId = parentCatIdSelected,
+                                        description = catDescAr,
+                                        isPinned = pinCategoryCheck,
+                                        isPublished = displayDirectlyCheck
+                                    )
+                                    vm.updateCategory(updatedCat, "الأدمن")
+                                    Toast.makeText(context, "تم تحديث القسم المهني بنجاح سحابياً!", Toast.LENGTH_SHORT).show()
+                                    editingCategory = null
+                                } else {
+                                    val cleanId = catNameAr.lowercase().replace(" ", "_").trim()
+                                    val nCategory = Category(
+                                        id = cleanId,
+                                        nameAr = catNameAr,
+                                        nameEn = catNameEn,
+                                        iconUrl = catIconSim,
+                                        order = if (pinCategoryCheck) 0 else 5,
+                                        parentId = parentCatIdSelected,
+                                        description = catDescAr,
+                                        isPinned = pinCategoryCheck,
+                                        isPublished = displayDirectlyCheck
+                                    )
+                                    vm.addCategory(nCategory, "الأدمن")
+                                    Toast.makeText(context, "تم حفظ وقبول القسم المهني بنجاح سحابياً!", Toast.LENGTH_SHORT).show()
+                                }
                                 catNameAr = ""
                                 catNameEn = ""
                                 catDescAr = ""
+                                catIconSim = "🛠️"
                                 parentCatIdSelected = ""
                                 pinCategoryCheck = false
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
+                        colors = ButtonDefaults.buttonColors(containerColor = if (editingCategory != null) AppTheme.accentGold else AppTheme.primaryRed),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("حفظ وإطلاق القسم بالقائمة 💾", color = Color.White)
+                        Text(
+                            text = if (editingCategory != null) "تحديث معلومات القسم المهني 💾" else "حفظ وإطلاق القسم بالقائمة 💾", 
+                            color = if (editingCategory != null) Color.Black else Color.White,
+                            fontFamily = fontFamily
+                        )
                     }
                 }
             }
 
-            Text("📁 هيكلية أقسام وتصنيف المهن النشطة بالدليل:", color = AppTheme.accentGold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text("📁 هيكلية أقسام وتصنيف المهن النشطة بالدليل (اضغط ✏️ للتعديل فوراً):", color = AppTheme.accentGold, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = fontFamily)
             categories.filter { it.parentId.isEmpty() }.forEach { parent ->
                 Card(colors = CardDefaults.cardColors(containerColor = AppTheme.surfaceDark), border = BorderStroke(1.dp, Color(0xFF223639)), modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(10.dp)) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(parent.iconUrl, fontSize = 16.sp)
+                                CategoryIconOrImage(parent.iconUrl, iconSize = 16)
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text(parent.nameAr, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text(parent.nameAr, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, fontFamily = fontFamily)
                                 if (parent.isPinned) {
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("📌 مثبت", color = AppTheme.accentGold, fontSize = 9.sp)
+                                    Text("📌 مثبت", color = AppTheme.accentGold, fontSize = 9.sp, fontFamily = fontFamily)
                                 }
                             }
-                            IconButton(onClick = { vm.deleteCategory(parent.id, "الأدمن") }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = AppTheme.primaryRed, modifier = Modifier.size(20.dp))
+                            Row {
+                                IconButton(onClick = {
+                                    editingCategory = parent
+                                    catNameAr = parent.nameAr
+                                    catNameEn = parent.nameEn ?: ""
+                                    catDescAr = parent.description ?: ""
+                                    catIconSim = parent.iconUrl
+                                    parentCatIdSelected = parent.parentId
+                                    pinCategoryCheck = parent.isPinned
+                                    displayDirectlyCheck = parent.isPublished
+                                }) {
+                                    Icon(Icons.Default.Edit, contentDescription = "Edit", tint = AppTheme.accentGold, modifier = Modifier.size(20.dp))
+                                }
+                                IconButton(onClick = { vm.deleteCategory(parent.id, "الأدمن") }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = AppTheme.primaryRed, modifier = Modifier.size(20.dp))
+                                }
                             }
                         }
                         if (parent.description.isNotBlank()) {
-                            Text(parent.description, color = Color.Gray, fontSize = 10.sp, modifier = Modifier.padding(start = 22.dp, bottom = 4.dp))
+                            Text(parent.description, color = Color.Gray, fontSize = 10.sp, modifier = Modifier.padding(start = 22.dp, bottom = 4.dp), fontFamily = fontFamily)
                         }
 
                         val subCats = categories.filter { it.parentId == parent.id }
                         if (subCats.isNotEmpty()) {
                             Column(modifier = Modifier.padding(start = 24.dp).background(Color(0xFF0F2225)).padding(6.dp)) {
-                                Text("الأقسام الفرعية المتفرعة:", color = AppTheme.accentGold, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                Text("الأقسام الفرعية المتفرعة:", color = AppTheme.accentGold, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = fontFamily)
                                 subCats.forEach { sub ->
                                     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                        Text("↳ ${sub.iconUrl} ${sub.nameAr}", color = Color.LightGray, fontSize = 11.sp)
-                                        IconButton(onClick = { vm.deleteCategory(sub.id, "الأدمن") }, modifier = Modifier.size(18.dp)) {
-                                            Icon(Icons.Default.Close, contentDescription = "Delete Sub", tint = Color.Red, modifier = Modifier.size(12.dp))
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text("↳ ", color = Color.Gray, fontSize = 11.sp, fontFamily = fontFamily)
+                                            CategoryIconOrImage(sub.iconUrl, iconSize = 12)
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(sub.nameAr, color = Color.LightGray, fontSize = 11.sp, fontFamily = fontFamily)
+                                        }
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            IconButton(onClick = {
+                                                editingCategory = sub
+                                                catNameAr = sub.nameAr
+                                                catNameEn = sub.nameEn ?: ""
+                                                catDescAr = sub.description ?: ""
+                                                catIconSim = sub.iconUrl
+                                                parentCatIdSelected = sub.parentId
+                                                pinCategoryCheck = sub.isPinned
+                                                displayDirectlyCheck = sub.isPublished
+                                            }, modifier = Modifier.size(18.dp)) {
+                                                Icon(Icons.Default.Edit, contentDescription = "Edit Sub", tint = AppTheme.accentGold, modifier = Modifier.size(12.dp))
+                                            }
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            IconButton(onClick = { vm.deleteCategory(sub.id, "الأدمن") }, modifier = Modifier.size(18.dp)) {
+                                                Icon(Icons.Default.Close, contentDescription = "Delete Sub", tint = Color.Red, modifier = Modifier.size(12.dp))
+                                            }
                                         }
                                     }
                                 }
