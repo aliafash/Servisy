@@ -114,7 +114,9 @@ data class Provider(
     val isRecommended: Boolean = false,
     val isSubscribed: Boolean = false,
     val deviceId: String = "admin",
-    val imageUrl: String = ""
+    val imageUrl: String = "",
+    val portfolioImages: List<String> = emptyList(),
+    val orderPriority: Int = 0
 )
 
 @Serializable
@@ -128,7 +130,9 @@ data class PendingProvider(
     val area: String = "",
     val deviceId: String = "",
     val selfieImageBase64: String = "",
-    val isFemale: Boolean = false
+    val isFemale: Boolean = false,
+    val portfolioImages: List<String> = emptyList(),
+    val orderPriority: Int = 0
 )
 
 @Serializable
@@ -241,6 +245,21 @@ data class AdminAccount(
 )
 
 @Serializable
+data class PresetPalette(
+    val name: String = "",
+    val primaryHex: String = "",
+    val accentHex: String = "",
+    val bgHex: String = "",
+    val surfaceHex: String = ""
+)
+
+@Serializable
+data class FaqItem(
+    val question: String = "",
+    val answer: String = ""
+)
+
+@Serializable
 data class AppSettings(
     val footerText: String = "wam 2026",
     val footerFontSize: Int = 11,
@@ -290,7 +309,31 @@ data class AppSettings(
     val assistantIconSizePercent: Int = 100,
     val chatIconSizePercent: Int = 100,
     val appLogoText: String = "WAM",
-    val appLogoUrl: String = ""
+    val appLogoUrl: String = "",
+    val isGeoSearchEnabled: Boolean = true,
+    val searchMatchingMethodHex: String = "fuzzy", // "exact" or "fuzzy"
+    val maxPortfolioImages: Int = 5,
+    val colorsPresetsList: List<PresetPalette> = listOf(
+        PresetPalette("🦅 اليمن الأحمر", "#CE1126", "#FFD700", "#0D1B1E", "#162A2D"),
+        PresetPalette("🔵 الأزرق الملكي", "#0D47A1", "#00E5FF", "#0A192F", "#172A45"),
+        PresetPalette("🔴 الأحمر المتوهج", "#FF1744", "#FFEB3B", "#1C0D0E", "#2D1719"),
+        PresetPalette("✨ السمة المميزة", "#FFB300", "#00E5FF", "#1A1710", "#2D281D"),
+        PresetPalette("🌌 كوزميك سيلفر", "#9E9E9E", "#E0E0E0", "#121212", "#1C1C1C"),
+        PresetPalette("✨ ذهبي فاخر", "#D4AF37", "#FFD700", "#1A1A1A", "#2D2D2D"),
+        PresetPalette("🟢 زمردي راقي", "#004B49", "#50C878", "#0C1814", "#152A20"),
+        PresetPalette("⚫ الأسود الدخاني", "#121212", "#7E7E7E", "#1B1B1B", "#262626"),
+        PresetPalette("🌸 الزهري الفاتح", "#FFB6C1", "#FFD700", "#2D1D23", "#3D2B32"),
+        PresetPalette("⚪ الأبيض الذهبي", "#FAF6EB", "#D4AF37", "#FFFFFF", "#F5F5F0")
+    ),
+    val faqList: List<FaqItem> = listOf(
+        FaqItem("كيف يمكنني الاتصال بالدعم الفني للمبادرة؟", "يمكنك الاتصال بنا مباشرة على الرقم 777644670 أو مراسلتنا واتساب على نفس الرقم في أي وقت."),
+        FaqItem("كيف أعدل بياناتي بعد التسجيل؟", "يمكنك مراجعة أقرب مصلح أو إرسال طلب تحديث لتعديل اسمك أو رقم هاتفك أو معرض أعمالك الفنية فورياً."),
+        FaqItem("هل الخدمات مجانية بالدليل؟", "نعم! الدليل مجاني تماماً ويهدف لتسهيل وصول طالبي الخدمة للكوادر اليمنية بكافة المحافظات.")
+    ),
+    val initiativeSupportNumber: String = "777644670",
+    val notificationsEnabled: Boolean = true,
+    val reviewSystemEnabled: Boolean = true,
+    val blockedKeywords: List<String> = listOf("كلب", "حمار", "سيئ", "نصاب")
 )
 
 // --- GEMINI DIRECT REST IMPLEMENTATION SCHEMAS ---
@@ -606,6 +649,16 @@ class MainViewModel : ViewModel() {
                             val logTextVal = snapshot.getString("appLogoText") ?: "WAM"
                             val logUrlVal = snapshot.getString("appLogoUrl") ?: ""
 
+                            val geoEnabled = snapshot.getBoolean("isGeoSearchEnabled") ?: true
+                            val searchMatchMethod = snapshot.getString("searchMatchingMethodHex") ?: "fuzzy"
+                            val maxPortImages = snapshot.getLong("maxPortfolioImages")?.toInt() ?: 5
+                            val supportNo = snapshot.getString("initiativeSupportNumber") ?: "777644670"
+                            val notifsEnabled = snapshot.getBoolean("notificationsEnabled") ?: true
+                            val reviewsEnabled = snapshot.getBoolean("reviewSystemEnabled") ?: true
+
+                            @Suppress("UNCHECKED_CAST")
+                            val blockedKeys = snapshot.get("blockedKeywords") as? List<String> ?: listOf("كلب", "حمار", "سيئ", "نصاب")
+
                             @Suppress("UNCHECKED_CAST")
                             val rules = snapshot.get("registrationRulesList") as? List<String> ?: listOf(
                                 "يجب أن يكون المتقدم مواطناً يمنياً أو مقيماً مرخصاً بالجمهورية اليمنية.",
@@ -658,7 +711,14 @@ class MainViewModel : ViewModel() {
                                 assistantIconSizePercent = aSizePercentVal,
                                 chatIconSizePercent = cSizePercentVal,
                                 appLogoText = logTextVal,
-                                appLogoUrl = logUrlVal
+                                appLogoUrl = logUrlVal,
+                                isGeoSearchEnabled = geoEnabled,
+                                searchMatchingMethodHex = searchMatchMethod,
+                                maxPortfolioImages = maxPortImages,
+                                initiativeSupportNumber = supportNo,
+                                notificationsEnabled = notifsEnabled,
+                                reviewSystemEnabled = reviewsEnabled,
+                                blockedKeywords = blockedKeys
                             )
                         }
                     }
@@ -796,7 +856,9 @@ class MainViewModel : ViewModel() {
             area = pp.area,
             isVerified = true,
             deviceId = pp.deviceId,
-            imageUrl = pp.selfieImageBase64
+            imageUrl = pp.selfieImageBase64,
+            portfolioImages = pp.portfolioImages,
+            orderPriority = pp.orderPriority
         )
         _providers.value = _providers.value + newP
         _pendingRequests.value = _pendingRequests.value.filter { it.id != pp.id }
@@ -1102,6 +1164,31 @@ class MainViewModel : ViewModel() {
         try {
             firestore?.collection("admins")?.document(account.username)?.set(account)
         } catch (e: Exception) {}
+    }
+
+    fun deleteAdminAccount(username: String, admin: String) {
+        _adminAccounts.value = _adminAccounts.value.filter { it.username != username }
+        addAuditLog(admin, "تم حذف حساب المشرف ذو الاسم: $username")
+        try {
+            firestore?.collection("admins")?.document(username)?.delete()
+        } catch (e: Exception) {}
+    }
+
+    fun updateAdminAccount(oldUsername: String, updatedAccount: AdminAccount, admin: String) {
+        if (oldUsername != updatedAccount.username) {
+            _adminAccounts.value = _adminAccounts.value.filter { it.username != oldUsername } + updatedAccount
+            addAuditLog(admin, "تحديث اسم وبيانات المشرف من $oldUsername إلى ${updatedAccount.username}")
+            try {
+                firestore?.collection("admins")?.document(oldUsername)?.delete()
+                firestore?.collection("admins")?.document(updatedAccount.username)?.set(updatedAccount)
+            } catch (e: Exception) {}
+        } else {
+            _adminAccounts.value = _adminAccounts.value.map { if (it.username == oldUsername) updatedAccount else it }
+            addAuditLog(admin, "تحديث كلمة مرور وصلاحيات المشرف: $oldUsername")
+            try {
+                firestore?.collection("admins")?.document(oldUsername)?.set(updatedAccount)
+            } catch (e: Exception) {}
+        }
     }
 
     fun addBanner(b: Banner, admin: String) {
@@ -3634,6 +3721,7 @@ fun JoinApplicationScreen(vm: MainViewModel) {
 
     var selfieBase64 by remember { mutableStateOf("") }
     var isFemaleGender by remember { mutableStateOf(false) }
+    var portfolioBase64List by remember { mutableStateOf<List<String>>(emptyList()) }
 
     val categories by vm.categoriesState.collectAsStateWithLifecycle()
     val cities by vm.citiesState.collectAsStateWithLifecycle()
@@ -3658,6 +3746,34 @@ fun JoinApplicationScreen(vm: MainViewModel) {
             val compressed = compressBitmapBase64(it, maxWidth = 320, maxHeight = 320, quality = 70)
             selfieBase64 = compressed
             Toast.makeText(context, "تم التقاط وضغط صورة السيلفي بنجاح عبر الكاميرا 📷", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val portfolioGalleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            if (portfolioBase64List.size >= settings.maxPortfolioImages) {
+                Toast.makeText(context, "الحد الأقصى لرفع صور معرض الأعمال هو ${settings.maxPortfolioImages} صور فقط!", Toast.LENGTH_LONG).show()
+                return@let
+            }
+            val compressed = compressImageBase64(context, it, maxWidth = 350, maxHeight = 350, quality = 65)
+            portfolioBase64List = portfolioBase64List + compressed
+            Toast.makeText(context, "تم إضافة نموذج من أعمالك بنجاح! 🖼️", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val portfolioCameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap: Bitmap? ->
+        bitmap?.let {
+            if (portfolioBase64List.size >= settings.maxPortfolioImages) {
+                Toast.makeText(context, "الحد الأقصى لرفع صور معرض الأعمال هو ${settings.maxPortfolioImages} صور فقط!", Toast.LENGTH_LONG).show()
+                return@let
+            }
+            val compressed = compressBitmapBase64(it, maxWidth = 350, maxHeight = 350, quality = 65)
+            portfolioBase64List = portfolioBase64List + compressed
+            Toast.makeText(context, "تم التقاط نموذج من أعمالك بالنجاح! 📷", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -3714,9 +3830,13 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
-                        focusedBorderColor = AppTheme.accentGold
+                        focusedContainerColor = AppTheme.darkBg,
+                        unfocusedContainerColor = AppTheme.darkBg,
+                        errorContainerColor = AppTheme.darkBg,
+                        focusedBorderColor = AppTheme.accentGold,
+                        unfocusedBorderColor = Color.Gray
                     ),
-                    textStyle = TextStyle(fontFamily = fontFamily)
+                    textStyle = TextStyle(color = Color.White, fontFamily = fontFamily)
                 )
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -3761,9 +3881,13 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
-                        focusedBorderColor = AppTheme.accentGold
+                        focusedContainerColor = AppTheme.darkBg,
+                        unfocusedContainerColor = AppTheme.darkBg,
+                        errorContainerColor = AppTheme.darkBg,
+                        focusedBorderColor = AppTheme.accentGold,
+                        unfocusedBorderColor = Color.Gray
                     ),
-                    textStyle = TextStyle(fontFamily = fontFamily)
+                    textStyle = TextStyle(color = Color.White, fontFamily = fontFamily)
                 )
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -3775,9 +3899,13 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
-                        focusedBorderColor = AppTheme.accentGold
+                        focusedContainerColor = AppTheme.darkBg,
+                        unfocusedContainerColor = AppTheme.darkBg,
+                        errorContainerColor = AppTheme.darkBg,
+                        focusedBorderColor = AppTheme.accentGold,
+                        unfocusedBorderColor = Color.Gray
                     ),
-                    textStyle = TextStyle(fontFamily = fontFamily)
+                    textStyle = TextStyle(color = Color.White, fontFamily = fontFamily)
                 )
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -3789,9 +3917,13 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
-                        focusedBorderColor = AppTheme.accentGold
+                        focusedContainerColor = AppTheme.darkBg,
+                        unfocusedContainerColor = AppTheme.darkBg,
+                        errorContainerColor = AppTheme.darkBg,
+                        focusedBorderColor = AppTheme.accentGold,
+                        unfocusedBorderColor = Color.Gray
                     ),
-                    textStyle = TextStyle(fontFamily = fontFamily)
+                    textStyle = TextStyle(color = Color.White, fontFamily = fontFamily)
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -3846,7 +3978,7 @@ fun JoinApplicationScreen(vm: MainViewModel) {
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // --- PHOTO CAPTURE & SELECT FIELD ---
+                // --- SINGLE SELFIE / MAIN IMAGE CAPTURE ---
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -3922,6 +4054,84 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                             }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Divider(color = Color(0xFF223639), thickness = 1.dp)
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // --- PORTFOLIO GALLERY IMAGES CAPTURE ---
+                    Text(
+                        text = "🎨 معرض صور من نماذج أعمالك ومشاريعك (${portfolioBase64List.size}/${settings.maxPortfolioImages}):",
+                        color = AppTheme.accentGold,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = fontFamily
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { portfolioCameraLauncher.launch(null) },
+                            colors = ButtonDefaults.buttonColors(containerColor = AppTheme.surfaceDark),
+                            modifier = Modifier.weight(1f).height(36.dp).border(1.dp, Color(0xFF223639), RoundedCornerShape(6.dp)),
+                            contentPadding = PaddingValues(0.dp),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Icon(Icons.Default.Camera, contentDescription = "Cam Work", modifier = Modifier.size(13.dp), tint = AppTheme.accentGold)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("التقاط عمل 📷", fontSize = 9.sp, color = Color.White, fontFamily = fontFamily)
+                        }
+
+                        Button(
+                            onClick = { portfolioGalleryLauncher.launch("image/*") },
+                            colors = ButtonDefaults.buttonColors(containerColor = AppTheme.surfaceDark),
+                            modifier = Modifier.weight(1f).height(36.dp).border(1.dp, Color(0xFF223639), RoundedCornerShape(6.dp)),
+                            contentPadding = PaddingValues(0.dp),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Icon(Icons.Default.AddPhotoAlternate, contentDescription = "Gal Work", modifier = Modifier.size(13.dp), tint = AppTheme.accentGold)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("إضافة من الألبوم 🖼️", fontSize = 9.sp, color = Color.White, fontFamily = fontFamily)
+                        }
+                    }
+
+                    if (portfolioBase64List.isNotEmpty()) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        ) {
+                            itemsIndexed(portfolioBase64List) { idx, base64 ->
+                                val bitmap = rememberBase64Bitmap(base64)
+                                bitmap?.let {
+                                    Box(modifier = Modifier.size(70.dp)) {
+                                        Card(
+                                            modifier = Modifier.fillMaxSize(),
+                                            shape = RoundedCornerShape(6.dp),
+                                            border = BorderStroke(1.dp, AppTheme.accentGold)
+                                        ) {
+                                            Image(
+                                                bitmap = it.asImageBitmap(),
+                                                contentDescription = "Portfolio Image",
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = { portfolioBase64List = portfolioBase64List.filterIndexed { i, _ -> i != idx } },
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .align(Alignment.TopEnd)
+                                                .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                                        ) {
+                                            Icon(Icons.Default.Close, contentDescription = "Remove", tint = Color.Red, modifier = Modifier.size(12.dp))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
@@ -3944,7 +4154,9 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                                 area = area,
                                 deviceId = "device_${UUID.randomUUID().toString().take(4)}",
                                 selfieImageBase64 = selfieBase64,
-                                isFemale = isFemaleGender
+                                isFemale = isFemaleGender,
+                                portfolioImages = portfolioBase64List,
+                                orderPriority = 0
                             )
                             vm.registerPendingProvider(newRequest)
                             name = ""
@@ -3952,6 +4164,7 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                             area = ""
                             description = ""
                             selfieBase64 = ""
+                            portfolioBase64List = emptyList()
                             Toast.makeText(context, "تم رفع وتخزين طلب تسجيلك بنجاح! جاري معالجة طلبك وقبوله بواسطة الإدارة خلال دقائق.", Toast.LENGTH_LONG).show()
                         }
                     },
@@ -3978,17 +4191,56 @@ fun AppInfoScreen(vm: MainViewModel) {
             .verticalScroll(rememberScrollState())
             .padding(14.dp)
     ) {
-        // Hero Photo Cover - Dynamic loaded with custom image url configured by admin
-        AsyncImage(
-            model = settings.aboutImageUrl,
-            contentDescription = "About Cover Image",
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(160.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .border(1.dp, AppTheme.accentGold, RoundedCornerShape(12.dp))
-        )
+        // Hero Photo Cover - Dynamic loaded with custom image url or base64 or text banner
+        val aboutCoverVal = settings.aboutImageUrl
+        val isTextBanner = aboutCoverVal.startsWith("text:") || 
+                (!aboutCoverVal.startsWith("http://") && 
+                 !aboutCoverVal.startsWith("https://") && 
+                 !aboutCoverVal.startsWith("data:image/") && 
+                 aboutCoverVal.length < 150)
+
+        if (isTextBanner) {
+            val displayTxt = if (aboutCoverVal.startsWith("text:")) aboutCoverVal.substringAfter("text:") else aboutCoverVal
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(160.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        androidx.compose.ui.graphics.Brush.horizontalGradient(
+                            colors = listOf(
+                                Color(0xFF0F2225),
+                                AppTheme.primaryRed,
+                                AppTheme.accentGold.copy(alpha = 0.8f)
+                            )
+                        )
+                    )
+                    .border(1.dp, AppTheme.accentGold, RoundedCornerShape(12.dp))
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = displayTxt,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    textAlign = TextAlign.Center,
+                    fontFamily = resolveAppFontFamily(settings.selectedFontName)
+                )
+            }
+        } else {
+            val base64Bitmap = rememberBase64Bitmap(aboutCoverVal)
+            AsyncImage(
+                model = base64Bitmap ?: aboutCoverVal,
+                contentDescription = "About Cover Image",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(160.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .border(1.dp, AppTheme.accentGold, RoundedCornerShape(12.dp))
+            )
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -4062,11 +4314,13 @@ fun AdminSettingsScreen(vm: MainViewModel) {
     val currentFont = resolveAppFontFamily(settings.selectedFontName)
 
     if (loggedAdmin.isEmpty()) {
-        // Show Admin Login Box with support for full multi-layer account checking
-        var usernameInput by remember { mutableStateOf("") }
-        var passwordInput by remember { mutableStateOf("") }
-        var errorState by remember { mutableStateOf(false) }
         val context = LocalContext.current
+        val loginPrefs = remember { context.getSharedPreferences("admin_login_prefs", Context.MODE_PRIVATE) }
+        var rememberMe by remember { mutableStateOf(loginPrefs.getBoolean("remember_me", false)) }
+        var usernameInput by remember { mutableStateOf(if (rememberMe) loginPrefs.getString("saved_username", "") ?: "" else "") }
+        var passwordInput by remember { mutableStateOf(if (rememberMe) loginPrefs.getString("saved_password", "") ?: "" else "") }
+        var errorState by remember { mutableStateOf(false) }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -4114,11 +4368,16 @@ fun AdminSettingsScreen(vm: MainViewModel) {
                         },
                         label = { Text("اسم المستخدم", fontFamily = currentFont, color = Color.Gray, fontSize = 11.sp) },
                         modifier = Modifier.fillMaxWidth(),
+                        textStyle = TextStyle(color = Color.White, fontFamily = currentFont),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White,
+                            focusedContainerColor = AppTheme.darkBg,
+                            unfocusedContainerColor = AppTheme.darkBg,
+                            errorContainerColor = AppTheme.darkBg,
                             focusedBorderColor = AppTheme.accentGold,
-                            unfocusedBorderColor = Color.Gray
+                            unfocusedBorderColor = Color.Gray,
+                            cursorColor = AppTheme.accentGold
                         ),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Next)
                     )
@@ -4131,16 +4390,43 @@ fun AdminSettingsScreen(vm: MainViewModel) {
                         },
                         label = { Text("رمز المرور السري", fontFamily = currentFont, color = Color.Gray, fontSize = 11.sp) },
                         modifier = Modifier.fillMaxWidth(),
+                        textStyle = TextStyle(color = Color.White, fontFamily = currentFont),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White,
+                            focusedContainerColor = AppTheme.darkBg,
+                            unfocusedContainerColor = AppTheme.darkBg,
+                            errorContainerColor = AppTheme.darkBg,
                             focusedBorderColor = AppTheme.accentGold,
-                            unfocusedBorderColor = Color.Gray
+                            unfocusedBorderColor = Color.Gray,
+                            cursorColor = AppTheme.accentGold
                         ),
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                         isError = errorState
                     )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { rememberMe = !rememberMe }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Start
+                    ) {
+                        Checkbox(
+                            checked = rememberMe,
+                            onCheckedChange = { rememberMe = it },
+                            colors = CheckboxDefaults.colors(checkedColor = AppTheme.accentGold, uncheckedColor = Color.Gray)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "حفظ بيانات تسجيل الدخول تلقائياً 💾",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontFamily = currentFont
+                        )
+                    }
 
                     if (errorState) {
                         Text("اسم المستخدم أو كلمة المرور غير صحيحة!", color = AppTheme.primaryRed, fontSize = 10.sp, fontFamily = currentFont)
@@ -4149,6 +4435,15 @@ fun AdminSettingsScreen(vm: MainViewModel) {
                     Button(
                         onClick = {
                             if (vm.checkAdminThreeLayersLogin(usernameInput, passwordInput)) {
+                                if (rememberMe) {
+                                    loginPrefs.edit()
+                                        .putBoolean("remember_me", true)
+                                        .putString("saved_username", usernameInput)
+                                        .putString("saved_password", passwordInput)
+                                        .apply()
+                                } else {
+                                    loginPrefs.edit().clear().apply()
+                                }
                                 Toast.makeText(context, "أهلاً بك، تم تسجيل الدخول كـ ${vm.loggedInUsername.value}", Toast.LENGTH_SHORT).show()
                             } else {
                                 errorState = true
@@ -5326,17 +5621,55 @@ fun SupervisorsAdminTab(vm: MainViewModel, list: List<AdminAccount>) {
     var privilegeDeleteActiveProviders by remember { mutableStateOf(false) }
     var privilegeSeeReports by remember { mutableStateOf(false) }
 
+    var editingSupervisor by remember { mutableStateOf<AdminAccount?>(null) }
+
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Card(colors = CardDefaults.cardColors(containerColor = AppTheme.surfaceDark)) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("👥 تفعيل وإنشاء حساب إداري لمراقب فرعي جديد", color = AppTheme.accentGold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                
+                if (editingSupervisor != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("✨ جاري تعديل المشرف: ${editingSupervisor!!.username}", color = AppTheme.accentGold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text(
+                            text = "[إلغاء التعديل ❌]",
+                            color = AppTheme.primaryRed,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clickable {
+                                editingSupervisor = null
+                                newAdminUser = ""
+                                newAdminPass = ""
+                                privilegeApproveRequests = true
+                                privilegeManageCategories = false
+                                privilegeManageBanners = false
+                                privilegeDeleteActiveProviders = false
+                                privilegeSeeReports = false
+                            }
+                        )
+                    }
+                } else {
+                    Text("👥 تفعيل وإنشاء حساب إداري لمراقب فرعي جديد", color = AppTheme.accentGold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
 
                 OutlinedTextField(
                     value = newAdminUser,
                     onValueChange = { newAdminUser = it },
                     label = { Text("اسم المستخدم للأدمن") },
                     modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                    textStyle = TextStyle(color = Color.White),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedContainerColor = AppTheme.darkBg,
+                        unfocusedContainerColor = AppTheme.darkBg,
+                        errorContainerColor = AppTheme.darkBg,
+                        focusedBorderColor = AppTheme.accentGold,
+                        unfocusedBorderColor = Color.Gray
+                    )
                 )
 
                 OutlinedTextField(
@@ -5344,7 +5677,16 @@ fun SupervisorsAdminTab(vm: MainViewModel, list: List<AdminAccount>) {
                     onValueChange = { newAdminPass = it },
                     label = { Text("رمز المرور السري") },
                     modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                    textStyle = TextStyle(color = Color.White),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedContainerColor = AppTheme.darkBg,
+                        unfocusedContainerColor = AppTheme.darkBg,
+                        errorContainerColor = AppTheme.darkBg,
+                        focusedBorderColor = AppTheme.accentGold,
+                        unfocusedBorderColor = Color.Gray
+                    )
                 )
 
                 Text("تخصيص الصلاحيات المستقلة (مربعات اختيار):", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -5386,10 +5728,17 @@ fun SupervisorsAdminTab(vm: MainViewModel, list: List<AdminAccount>) {
                                 canDeleteActiveProviders = privilegeDeleteActiveProviders,
                                 canSeeReports = privilegeSeeReports
                             )
-                            vm.addAdminAccount(account, "المدير العام")
-                            Toast.makeText(context, "تم تفعيل حساب المشرف الإداري ومزامنته بالدليل السحابي فورياً!", Toast.LENGTH_SHORT).show()
+                            if (editingSupervisor != null) {
+                                vm.updateAdminAccount(editingSupervisor!!.username, account, "المدير العام")
+                                Toast.makeText(context, "تم تعديل وحفظ بيانات المشرف بنجاح! 💾", Toast.LENGTH_SHORT).show()
+                                editingSupervisor = null
+                            } else {
+                                vm.addAdminAccount(account, "المدير العام")
+                                Toast.makeText(context, "تم تفعيل حساب المشرف الإداري ومزامنته بالدليل السحابي فورياً!", Toast.LENGTH_SHORT).show()
+                            }
                             newAdminUser = ""
                             newAdminPass = ""
+                            privilegeApproveRequests = true
                             privilegeManageCategories = false
                             privilegeManageBanners = false
                             privilegeDeleteActiveProviders = false
@@ -5399,7 +5748,11 @@ fun SupervisorsAdminTab(vm: MainViewModel, list: List<AdminAccount>) {
                     colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("إنشاء حساب المشرف الجديد وتفعيله 👥", color = Color.White, fontSize = 11.sp)
+                    Text(
+                        text = if (editingSupervisor != null) "حفظ وتعديل حساب المشرف 💾" else "إنشاء حساب المشرف الجديد وتفعيله 👥", 
+                        color = Color.White, 
+                        fontSize = 11.sp
+                    )
                 }
             }
         }
@@ -5410,6 +5763,59 @@ fun SupervisorsAdminTab(vm: MainViewModel, list: List<AdminAccount>) {
                 Column(modifier = Modifier.padding(10.dp)) {
                     Text("👤 اسم المشرف: ${acc.username}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     Text("🔑 كلمة المرور المشفرة: ${acc.passwordHash}", color = Color.LightGray, fontSize = 10.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("🛡️ الصلاحيات: " + listOfNotNull(
+                        if (acc.canApproveRequests) "القبول" else null,
+                        if (acc.canManageCategories) "الاقسام" else null,
+                        if (acc.canManageBanners) "البنرات" else null,
+                        if (acc.canDeleteActiveProviders) "الحذف" else null,
+                        if (acc.canSeeReports) "البلاغات" else null
+                    ).joinToString(" | "), color = Color.Gray, fontSize = 9.sp)
+                    
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = {
+                                editingSupervisor = acc
+                                newAdminUser = acc.username
+                                newAdminPass = acc.passwordHash
+                                privilegeApproveRequests = acc.canApproveRequests
+                                privilegeManageCategories = acc.canManageCategories
+                                privilegeManageBanners = acc.canManageBanners
+                                privilegeDeleteActiveProviders = acc.canDeleteActiveProviders
+                                privilegeSeeReports = acc.canSeeReports
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F2225)),
+                            modifier = Modifier.height(32.dp).border(1.dp, Color(0xFF223639), RoundedCornerShape(4.dp)),
+                            shape = RoundedCornerShape(4.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp)
+                        ) {
+                            Text("📝 تعديل", fontSize = 10.sp, color = AppTheme.accentGold)
+                        }
+                        
+                        Spacer(modifier = Modifier.width(8.dp))
+                        
+                        Button(
+                            onClick = {
+                                if (acc.username == "admin") {
+                                    Toast.makeText(context, "غير مسموح بحذف الحساب الرئيسي العام المدمر!", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    vm.deleteAdminAccount(acc.username, "المدير العام")
+                                    Toast.makeText(context, "تم حذف حساب المشرف الإداري ${acc.username} بنجاح!", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed.copy(alpha = 0.2f)),
+                            modifier = Modifier.height(32.dp).border(1.dp, AppTheme.primaryRed, RoundedCornerShape(4.dp)),
+                            shape = RoundedCornerShape(4.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp)
+                        ) {
+                            Text("❌ حذف", fontSize = 10.sp, color = AppTheme.primaryRed)
+                        }
+                    }
                 }
             }
         }
@@ -5421,6 +5827,18 @@ fun SupervisorsAdminTab(vm: MainViewModel, list: List<AdminAccount>) {
 fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
     val context = LocalContext.current
 
+    var aboutImageUrlVal by remember { mutableStateOf(settings.aboutImageUrl) }
+
+    val coverImagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            val compressed = compressImageBase64(context, it, maxWidth = 480, maxHeight = 240, quality = 80)
+            aboutImageUrlVal = compressed
+            Toast.makeText(context, "تم تحميل وضغط صورة غلاف معلومات التطبيق! 🎨", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     var primaryColorField by remember { mutableStateOf(settings.primaryColorHex) }
     var accentColorField by remember { mutableStateOf(settings.accentColorHex) }
     var bgColorField by remember { mutableStateOf(settings.bgColorHex) }
@@ -5429,7 +5847,6 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
     var appNameVal by remember { mutableStateOf(settings.appNameAr) }
     var welcomeMsgVal by remember { mutableStateOf(settings.welcomeMessage) }
     var downloadUrlVal by remember { mutableStateOf(settings.downloadUrl) }
-    var aboutImageUrlVal by remember { mutableStateOf(settings.aboutImageUrl) }
     var footerTextVal by remember { mutableStateOf(settings.footerText) }
 
     var aboutPhoneVal by remember { mutableStateOf(settings.aboutPhone) }
@@ -5828,13 +6245,56 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
                     colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
                 )
 
-                OutlinedTextField(
-                    value = aboutImageUrlVal,
-                    onValueChange = { aboutImageUrlVal = it },
-                    label = { Text("رابط غلاف الصورة التعريفية بصفحة معلومات التطبيق") },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
-                )
+                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    val fontStyle = resolveAppFontFamily(settings.selectedFontName)
+                    OutlinedTextField(
+                        value = aboutImageUrlVal,
+                        onValueChange = { aboutImageUrlVal = it },
+                        label = { Text("رابط صورة الغلاف أو رمز Base64 أو نص يبدأ بـ :text") },
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = TextStyle(color = Color.White, fontFamily = fontStyle),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedContainerColor = AppTheme.darkBg,
+                            unfocusedContainerColor = AppTheme.darkBg,
+                            errorContainerColor = AppTheme.darkBg,
+                            focusedBorderColor = AppTheme.accentGold,
+                            unfocusedBorderColor = Color.Gray,
+                            cursorColor = AppTheme.accentGold
+                        )
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { coverImagePicker.launch("image/*") },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F2225)),
+                            modifier = Modifier.weight(1f).height(40.dp).border(1.dp, Color(0xFF223639), RoundedCornerShape(4.dp)),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text("🖼️ رفع صورة من الذاكرة", fontSize = 10.sp, color = AppTheme.accentGold, fontFamily = fontStyle)
+                        }
+                        Button(
+                            onClick = { 
+                                aboutImageUrlVal = "text:كل خدمات اليمن ترحب بكم" 
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F2225)),
+                            modifier = Modifier.weight(1f).height(40.dp).border(1.dp, Color(0xFF223639), RoundedCornerShape(4.dp)),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text("✍️ تحويل لغلاف نصي", fontSize = 10.sp, color = AppTheme.accentGold, fontFamily = fontStyle)
+                        }
+                    }
+                    Text(
+                        text = "نصيحة: يمكنك رفع صورة وتطبيقها فوراً من المعرض، أو إدخال رابط إنترنت، أو كتابة نص يبدأ بعبارة 'text:' لظهورها كشعار نصي مبتكر ومظلل.",
+                        color = Color.LightGray,
+                        fontSize = 9.sp,
+                        lineHeight = 12.sp,
+                        fontFamily = fontStyle
+                    )
+                }
 
                 OutlinedTextField(
                     value = footerTextVal,
