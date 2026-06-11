@@ -431,13 +431,14 @@ class MainViewModel : ViewModel() {
         Category("education", "التعليم والتدريس", "Education & Teaching", "🎓", 9),
         Category("law", "المحاماة والاستشارات القانونية", "Law & Legal Services", "⚖️", 10),
         Category("engineering", "الهندسة والاستشارات الفنية", "Engineering & Consulting", "📐", 11),
+        Category("transport", "النقل وشحن البضائع", "Transport & Shipping", "🚚", 12),
         // Add default subcategories as requested to make child categories functional out-of-the-box
-        Category("dentistry", "طب وجراحة الأسنان", "Dentistry Services", "🦷", 12, parentId = "medicine"),
-        Category("pharmacy", "الصيدلة والأدوية", "Pharmacy & Medicine", "💊", 13, parentId = "medicine"),
-        Category("languages_edu", "تعليم لغات أجنبية", "Foreign Languages", "🗣️", 14, parentId = "education"),
-        Category("school_tutoring", "مدرسين وتقوية خصوصي", "Tutoring", "📖", 15, parentId = "education"),
-        Category("architect_eng", "هندسة معمارية وتصميم", "Architecture", "🏗️", 16, parentId = "engineering"),
-        Category("software_eng", "هندسة برمجيات وتقنية", "Software Engineering", "💻", 17, parentId = "engineering")
+        Category("dentistry", "طب وجراحة الأسنان", "Dentistry Services", "🦷", 13, parentId = "medicine"),
+        Category("pharmacy", "الصيدلة والأدوية", "Pharmacy & Medicine", "💊", 14, parentId = "medicine"),
+        Category("languages_edu", "تعليم لغات أجنبية", "Foreign Languages", "🗣️", 15, parentId = "education"),
+        Category("school_tutoring", "مدرسين وتقوية خصوصي", "Tutoring", "📖", 16, parentId = "education"),
+        Category("architect_eng", "هندسة معمارية وتصميم", "Architecture", "🏗️", 17, parentId = "engineering"),
+        Category("software_eng", "هندسة برمجيات وتقنية", "Software Engineering", "💻", 18, parentId = "engineering")
     )
 
     private val defaultCities = listOf(
@@ -2588,25 +2589,43 @@ fun ProfessionalCategoryFilterComponent(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val isSearchStopped = settings.searchMatchingMethodHex == "disabled"
             OutlinedTextField(
-                value = searchTxt,
-                onValueChange = { searchTxt = it },
-                placeholder = { Text("ابحث بالاسم، المهنة، الرقم، المنطقة، المدينة...", color = Color.Gray, fontSize = 10.sp) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = AppTheme.accentGold, modifier = Modifier.size(16.dp)) },
+                value = if (isSearchStopped) "" else searchTxt,
+                onValueChange = { if (!isSearchStopped) searchTxt = it },
+                enabled = !isSearchStopped,
+                placeholder = { 
+                    Text(
+                        text = if (isSearchStopped) "⚠️ تم تعطيل محرك البحث بواسطة الإدارة" else "ابحث بالاسم، المهنة، الرقم، المنطقة، المدينة...", 
+                        color = if (isSearchStopped) AppTheme.primaryRed else Color.Gray, 
+                        fontSize = 10.sp
+                    ) 
+                },
+                leadingIcon = { 
+                    Icon(
+                        imageVector = if (isSearchStopped) Icons.Default.Lock else Icons.Default.Search, 
+                        contentDescription = "Search", 
+                        tint = if (isSearchStopped) AppTheme.primaryRed else AppTheme.accentGold, 
+                        modifier = Modifier.size(16.dp)
+                    ) 
+                },
                 modifier = Modifier.weight(1f),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White,
+                    disabledTextColor = Color.Gray,
                     focusedContainerColor = AppTheme.surfaceDark,
                     unfocusedContainerColor = AppTheme.surfaceDark,
+                    disabledContainerColor = AppTheme.surfaceDark.copy(alpha = 0.5f),
                     focusedBorderColor = AppTheme.accentGold,
-                    unfocusedBorderColor = Color(0xFF223639)
+                    unfocusedBorderColor = Color(0xFF223639),
+                    disabledBorderColor = Color(0xFF223639).copy(alpha = 0.5f)
                 ),
                 shape = RoundedCornerShape(8.dp),
                 singleLine = true
             )
 
-            if (settings.isWebSpeechEnabled) {
+            if (settings.isWebSpeechEnabled && !isSearchStopped) {
                 IconButton(
                     onClick = {
                         val speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -2734,7 +2753,7 @@ fun ProfessionalCategoryFilterComponent(
             val matchCity = selectedCityId.isEmpty() || itPro.city == selectedCityId
             val matchNeighborhood = selectedNeighborhood.isEmpty() || itPro.area.contains(selectedNeighborhood, ignoreCase = true)
             
-            val matchQuery = if (searchTxt.isEmpty()) {
+            val matchQuery = if (searchTxt.isEmpty() || settings.searchMatchingMethodHex == "disabled") {
                 true
             } else {
                 val catObj = categories.find { it.id == itPro.category }
@@ -2745,14 +2764,29 @@ fun ProfessionalCategoryFilterComponent(
                 val cityNameAr = cityObj?.nameAr ?: ""
                 val cityNameEn = cityObj?.nameEn ?: ""
                 
-                itPro.name.contains(searchTxt, ignoreCase = true) ||
-                itPro.phone.contains(searchTxt) ||
-                itPro.area.contains(searchTxt, ignoreCase = true) ||
-                itPro.description.contains(searchTxt, ignoreCase = true) ||
-                catNameAr.contains(searchTxt, ignoreCase = true) ||
-                catNameEn.contains(searchTxt, ignoreCase = true) ||
-                cityNameAr.contains(searchTxt, ignoreCase = true) ||
-                cityNameEn.contains(searchTxt, ignoreCase = true)
+                val fields = listOf(
+                    itPro.name,
+                    itPro.phone,
+                    itPro.area,
+                    itPro.description,
+                    catNameAr,
+                    catNameEn,
+                    cityNameAr,
+                    cityNameEn
+                )
+                
+                if (settings.searchMatchingMethodHex == "exact") {
+                    fields.any { it.contains(searchTxt, ignoreCase = true) }
+                } else {
+                    val words = searchTxt.split("\\s+".toRegex()).filter { it.isNotBlank() }
+                    if (words.isEmpty()) {
+                        true
+                    } else {
+                        words.all { word ->
+                            fields.any { it.contains(word, ignoreCase = true) }
+                        }
+                    }
+                }
             }
             matchCat && matchCity && matchNeighborhood && matchQuery && itPro.isVerified
         }
@@ -3700,6 +3734,49 @@ fun getProviderCoordinates(provider: Provider): Pair<Double, Double> {
 // --- TAB 1: INTERACTIVE GEOGRAPHIC MAP VIEW (YEMEN RADAR) ---
 @Composable
 fun MockMapViewScreen(vm: MainViewModel) {
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    if (!settings.isGeoSearchEnabled) {
+        Box(
+            modifier = Modifier.fillMaxSize().background(Color(0xFF071112)).padding(16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = AppTheme.surfaceDark),
+                border = BorderStroke(1.5.dp, AppTheme.primaryRed),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth().padding(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Map,
+                        contentDescription = "Map Disabled",
+                        tint = AppTheme.primaryRed,
+                        modifier = Modifier.size(64.dp)
+                    )
+                    Text(
+                        text = "🔒 خدمة الخرائط معطلة مؤقتاً",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = "تم إيقاف ميزة تحديد أقرب مقدمي الخدمات والخرائط التفاعلية مؤقتاً بواسطة المشرف العام للتطبيق.",
+                        color = Color.Gray,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+        return
+    }
+
     val providers by vm.providers.collectAsStateWithLifecycle()
     val cities by vm.citiesState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -7239,6 +7316,8 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
     var chatDisMsgVal by remember { mutableStateOf(settings.chatDisabledMessage) }
 
     var isVoiceSpeechEnabledVal by remember { mutableStateOf(settings.isWebSpeechEnabled) }
+    var isGeoSearchEnabledVal by remember { mutableStateOf(settings.isGeoSearchEnabled) }
+    var searchMatchingMethodHexField by remember { mutableStateOf(settings.searchMatchingMethodHex) }
     var radiusValSelect by remember { mutableStateOf(settings.radiusSearchLimitKm.toString()) }
     var autoCleanupDaysVal by remember { mutableStateOf(settings.autoCleanupDays.toString()) }
     var maxPortImagesVal by remember { mutableStateOf(settings.maxPortfolioImages.toString()) }
@@ -7553,6 +7632,31 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = isVoiceSpeechEnabledVal, onCheckedChange = { isVoiceSpeechEnabledVal = it })
                     Text("تفعيل ميزة البحث الصوتي بمحرك الدليل 🎙️", color = Color.White, fontSize = 11.sp)
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = isGeoSearchEnabledVal, onCheckedChange = { isGeoSearchEnabledVal = it })
+                    Text("تفعيل رادار الخرائط التفاعلية والمسافات للمشتركين 🌍", color = Color.White, fontSize = 11.sp)
+                }
+
+                Text("آلية وطريقة عمل شريط البحث بالصفحة الرئيسية:", color = Color.White, fontSize = 11.sp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    listOf("fuzzy" to "بحث مرن ذكي 🔍", "exact" to "مطابق دقيق 🔎", "disabled" to "تعطيل البحث 🔒").forEach { (method, lbl) ->
+                        val isSel = searchMatchingMethodHexField == method
+                        FilterChip(
+                            selected = isSel,
+                            onClick = { searchMatchingMethodHexField = method },
+                            label = { Text(lbl, fontSize = 9.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = AppTheme.primaryRed,
+                                selectedLabelColor = Color.White,
+                                containerColor = Color(0xFF0F2225)
+                            )
+                        )
+                    }
                 }
 
                 Text("المدى الأقصى لبحث إحداثيات الخرائط:", color = Color.White, fontSize = 11.sp)
@@ -7951,6 +8055,8 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
                     isChatEnabled = isChatEnabledVal,
                     chatDisabledMessage = chatDisMsgVal,
                     isWebSpeechEnabled = isVoiceSpeechEnabledVal,
+                    isGeoSearchEnabled = isGeoSearchEnabledVal,
+                    searchMatchingMethodHex = searchMatchingMethodHexField,
                     radiusSearchLimitKm = upRadius,
                     autoCleanupDays = upCleanup,
                     appNameAr = appNameVal,
