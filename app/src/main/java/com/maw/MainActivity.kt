@@ -341,7 +341,14 @@ data class AppSettings(
     val initiativeSupportNumber: String = "777644670",
     val notificationsEnabled: Boolean = true,
     val reviewSystemEnabled: Boolean = true,
-    val blockedKeywords: List<String> = listOf("كلب", "حمار", "سيئ", "نصاب")
+    val blockedKeywords: List<String> = listOf("كلب", "حمار", "سيئ", "نصاب"),
+    val aboutTitleText: String = "ℹ️ عن منصة دليل كل خدمات اليمن",
+    val aboutVersionLabel: String = "النسخة الحالية:",
+    val aboutVersionValue: String = "v1.5.0",
+    val aboutVersionVisible: Boolean = true,
+    val aboutSecurityLabel: String = "مستوى التشفير والحقن:",
+    val aboutSecurityValue: String = "تشفير آمن سحابي",
+    val aboutSecurityVisible: Boolean = true
 )
 
 // --- GEMINI DIRECT REST IMPLEMENTATION SCHEMAS ---
@@ -679,6 +686,14 @@ class MainViewModel : ViewModel() {
                             val notifsEnabled = snapshot.getBoolean("notificationsEnabled") ?: true
                             val reviewsEnabled = snapshot.getBoolean("reviewSystemEnabled") ?: true
 
+                            val abTitleTxt = snapshot.getString("aboutTitleText") ?: "ℹ️ عن منصة دليل كل خدمات اليمن"
+                            val abVerLbl = snapshot.getString("aboutVersionLabel") ?: "النسخة الحالية:"
+                            val abVerVal = snapshot.getString("aboutVersionValue") ?: "v1.5.0"
+                            val abVerVis = snapshot.getBoolean("aboutVersionVisible") ?: true
+                            val abSecLbl = snapshot.getString("aboutSecurityLabel") ?: "مستوى التشفير والحقن:"
+                            val abSecVal = snapshot.getString("aboutSecurityValue") ?: "تشفير آمن سحابي"
+                            val abSecVis = snapshot.getBoolean("aboutSecurityVisible") ?: true
+
                             @Suppress("UNCHECKED_CAST")
                             val blockedKeys = snapshot.get("blockedKeywords") as? List<String> ?: listOf("كلب", "حمار", "سيئ", "نصاب")
 
@@ -741,7 +756,14 @@ class MainViewModel : ViewModel() {
                                 initiativeSupportNumber = supportNo,
                                 notificationsEnabled = notifsEnabled,
                                 reviewSystemEnabled = reviewsEnabled,
-                                blockedKeywords = blockedKeys
+                                blockedKeywords = blockedKeys,
+                                aboutTitleText = abTitleTxt,
+                                aboutVersionLabel = abVerLbl,
+                                aboutVersionValue = abVerVal,
+                                aboutVersionVisible = abVerVis,
+                                aboutSecurityLabel = abSecLbl,
+                                aboutSecurityValue = abSecVal,
+                                aboutSecurityVisible = abSecVis
                             )
                         }
                     }
@@ -4482,36 +4504,43 @@ fun AppInfoScreen(vm: MainViewModel) {
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
                 Text(
-                    text = "ℹ️ عن منصة دليل كل خدمات اليمن",
+                    text = settings.aboutTitleText,
                     color = AppTheme.accentGold,
                     fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = resolveAppFontFamily(settings.selectedFontName)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = settings.welcomeMessage,
                     color = Color.White,
                     fontSize = 12.sp,
-                    lineHeight = 18.sp
+                    lineHeight = 18.sp,
+                    fontFamily = resolveAppFontFamily(settings.selectedFontName)
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // App version stats
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("النسخة الحالية:", color = AppTheme.grayText, fontSize = 11.sp)
-                    Text("v1.5.0", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                if (settings.aboutVersionVisible) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(settings.aboutVersionLabel, color = AppTheme.grayText, fontSize = 11.sp, fontFamily = resolveAppFontFamily(settings.selectedFontName))
+                        Text(settings.aboutVersionValue, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = resolveAppFontFamily(settings.selectedFontName))
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
                 }
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("مستوى التشفير والحقن:", color = AppTheme.grayText, fontSize = 11.sp)
-                    Text("تشفير آمن سحابي", color = Color.Green, fontSize = 11.sp)
+                
+                if (settings.aboutSecurityVisible) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(settings.aboutSecurityLabel, color = AppTheme.grayText, fontSize = 11.sp, fontFamily = resolveAppFontFamily(settings.selectedFontName))
+                        Text(settings.aboutSecurityValue, color = Color.Green, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = resolveAppFontFamily(settings.selectedFontName))
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -4530,7 +4559,101 @@ fun AppInfoScreen(vm: MainViewModel) {
                         colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("تحميل وتثبيت التطبيق مباشرة (APK) 📥", color = Color.White, fontSize = 11.sp)
+                        Text("تحميل وتثبيت التطبيق مباشرة (APK) 📥", color = Color.White, fontSize = 11.sp, fontFamily = resolveAppFontFamily(settings.selectedFontName))
+                    }
+                }
+            }
+        }
+
+        // Support direct contacts section
+        if (settings.aboutPhoneVisible || settings.aboutWhatsappVisible || settings.aboutEmailVisible) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Card(
+                colors = CardDefaults.cardColors(containerColor = AppTheme.surfaceDark),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, Color(0xFF223639)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "📞 قنوات التواصل والدعم الفني المباشر:",
+                        color = AppTheme.accentGold,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = resolveAppFontFamily(settings.selectedFontName)
+                    )
+                    
+                    if (settings.aboutPhoneVisible && settings.aboutPhone.isNotBlank()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    try {
+                                        val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${settings.aboutPhone}"))
+                                        context.startActivity(intent)
+                                    } catch (e: Exception) {}
+                                }
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Icon(Icons.Default.Phone, contentDescription = "Call", tint = AppTheme.primaryRed, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                "اتصال هاتفي: ${settings.aboutPhone}",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontFamily = resolveAppFontFamily(settings.selectedFontName)
+                            )
+                        }
+                    }
+
+                    if (settings.aboutWhatsappVisible && settings.aboutWhatsapp.isNotBlank()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    try {
+                                        val url = "https://api.whatsapp.com/send?phone=${settings.aboutWhatsapp}"
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                        context.startActivity(intent)
+                                    } catch (e: Exception) {}
+                                }
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Icon(Icons.Default.Chat, contentDescription = "WhatsApp", tint = Color.Green, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                "واتساب مباشر: ${settings.aboutWhatsapp}",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontFamily = resolveAppFontFamily(settings.selectedFontName)
+                            )
+                        }
+                    }
+
+                    if (settings.aboutEmailVisible && settings.aboutEmail.isNotBlank()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    try {
+                                        val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:${settings.aboutEmail}"))
+                                        context.startActivity(intent)
+                                    } catch (e: Exception) {}
+                                }
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Icon(Icons.Default.Email, contentDescription = "Email", tint = AppTheme.accentGold, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                "البريد الإلكتروني: ${settings.aboutEmail}",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontFamily = resolveAppFontFamily(settings.selectedFontName)
+                            )
+                        }
                     }
                 }
             }
@@ -6596,6 +6719,14 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
     var aboutShareUrlVisibleVal by remember { mutableStateOf(settings.aboutShareUrlVisible) }
     var aboutImageVisibleVal by remember { mutableStateOf(settings.aboutImageVisible) }
 
+    var aboutTitleTextVal by remember { mutableStateOf(settings.aboutTitleText) }
+    var aboutVersionLabelVal by remember { mutableStateOf(settings.aboutVersionLabel) }
+    var aboutVersionValueVal by remember { mutableStateOf(settings.aboutVersionValue) }
+    var aboutVersionVisibleVal by remember { mutableStateOf(settings.aboutVersionVisible) }
+    var aboutSecurityLabelVal by remember { mutableStateOf(settings.aboutSecurityLabel) }
+    var aboutSecurityValueVal by remember { mutableStateOf(settings.aboutSecurityValue) }
+    var aboutSecurityVisibleVal by remember { mutableStateOf(settings.aboutSecurityVisible) }
+
     var cSizeValue by remember { mutableFloatStateOf(settings.chatIconSize.toFloat()) }
     var cColField by remember { mutableStateOf(settings.chatIconColorHex) }
     var cHiddenField by remember { mutableStateOf(settings.chatIconHidden) }
@@ -7120,6 +7251,57 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
                         colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
                     )
                 }
+
+                Spacer(modifier = Modifier.height(6.dp))
+                Text("📝 تخصيص نصوص النسخة والحماية لصفحة معلومات التطبيق:", color = AppTheme.accentGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+
+                OutlinedTextField(
+                    value = aboutTitleTextVal,
+                    onValueChange = { aboutTitleTextVal = it },
+                    label = { Text("عنوان قسم (عن المنصة) بصفحة معلومات التطبيق") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                )
+
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Checkbox(checked = aboutVersionVisibleVal, onCheckedChange = { aboutVersionVisibleVal = it })
+                    Spacer(modifier = Modifier.width(4.dp))
+                    OutlinedTextField(
+                        value = aboutVersionLabelVal,
+                        onValueChange = { aboutVersionLabelVal = it },
+                        label = { Text("عنوان النسخة") },
+                        modifier = Modifier.weight(1f),
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    OutlinedTextField(
+                        value = aboutVersionValueVal,
+                        onValueChange = { aboutVersionValueVal = it },
+                        label = { Text("رقم النسخة") },
+                        modifier = Modifier.weight(1f),
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Checkbox(checked = aboutSecurityVisibleVal, onCheckedChange = { aboutSecurityVisibleVal = it })
+                    Spacer(modifier = Modifier.width(4.dp))
+                    OutlinedTextField(
+                        value = aboutSecurityLabelVal,
+                        onValueChange = { aboutSecurityLabelVal = it },
+                        label = { Text("عنوان تشفير الأمان") },
+                        modifier = Modifier.weight(1f),
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    OutlinedTextField(
+                        value = aboutSecurityValueVal,
+                        onValueChange = { aboutSecurityValueVal = it },
+                        label = { Text("نص حالة التشفير والسرية") },
+                        modifier = Modifier.weight(1f),
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                    )
+                }
             }
         }
 
@@ -7282,7 +7464,23 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
                     welcomeMessage = welcomeMsgVal,
                     downloadUrl = downloadUrlVal,
                     aboutImageUrl = aboutImageUrlVal,
-                    footerText = footerTextVal
+                    footerText = footerTextVal,
+                    aboutPhone = aboutPhoneVal,
+                    aboutWhatsapp = aboutWhatsappVal,
+                    aboutEmail = aboutEmailVal,
+                    aboutShareUrl = aboutShareUrlVal,
+                    aboutPhoneVisible = aboutPhoneVisibleVal,
+                    aboutWhatsappVisible = aboutWhatsappVisibleVal,
+                    aboutEmailVisible = aboutEmailVisibleVal,
+                    aboutShareUrlVisible = aboutShareUrlVisibleVal,
+                    aboutImageVisible = aboutImageVisibleVal,
+                    aboutTitleText = aboutTitleTextVal,
+                    aboutVersionLabel = aboutVersionLabelVal,
+                    aboutVersionValue = aboutVersionValueVal,
+                    aboutVersionVisible = aboutVersionVisibleVal,
+                    aboutSecurityLabel = aboutSecurityLabelVal,
+                    aboutSecurityValue = aboutSecurityValueVal,
+                    aboutSecurityVisible = aboutSecurityVisibleVal
                 )
                 
                 vm.updateAppSettings(updatedSettingsObj, "الأدمن")
@@ -7452,7 +7650,11 @@ fun SmartAssistantSheet(
                                             bottomEnd = if (isUser) 0.dp else 10.dp
                                         )
                                     )
-                                    .background(if (isUser) AppTheme.primaryRed else AppTheme.darkBg)
+                                    .background(if (isUser) AppTheme.primaryRed else Color(0xFF1E3539))
+                                    .then(
+                                        if (!isUser) Modifier.border(1.dp, AppTheme.accentGold.copy(alpha = 0.5f), RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp, bottomStart = 0.dp, bottomEnd = 10.dp))
+                                        else Modifier
+                                    )
                                     .padding(10.dp)
                                     .widthIn(max = 240.dp)
                             ) {
