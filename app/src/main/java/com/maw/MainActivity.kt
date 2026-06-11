@@ -87,6 +87,14 @@ fun resolveAppFontFamily(fontName: String): FontFamily {
     }
 }
 
+fun safeParseColor(hex: String, default: Color = Color.Gray): Color {
+    return try {
+        Color(android.graphics.Color.parseColor(hex))
+    } catch (e: Exception) {
+        default
+    }
+}
+
 // --- STYLES & THEME CONFIGURATION ---
 object AppTheme {
     var darkBg by mutableStateOf(Color(0xFF0D1B1E)) // Slate dark
@@ -403,7 +411,18 @@ class MainViewModel : ViewModel() {
         Category("carpentry", "نجارة وأثاث", "Carpentry & Decor", "🪚", 4),
         Category("conditioning", "تكييف وتبريد", "AC & Refrigeration", "❄️", 5),
         Category("construction", "مقاولات وبناء", "Construction & Paints", "🧱", 6),
-        Category("computers", "برمجة وصيانة هواتف", "Mobile & PC Maintenance", "💻", 7)
+        Category("computers", "برمجة وصيانة هواتف", "Mobile & PC Maintenance", "💻", 7),
+        Category("medicine", "الطب والرعاية الصحية", "Medicine & Healthcare", "🩺", 8),
+        Category("education", "التعليم والتدريس", "Education & Teaching", "🎓", 9),
+        Category("law", "المحاماة والاستشارات القانونية", "Law & Legal Services", "⚖️", 10),
+        Category("engineering", "الهندسة والاستشارات الفنية", "Engineering & Consulting", "📐", 11),
+        // Add default subcategories as requested to make child categories functional out-of-the-box
+        Category("dentistry", "طب وجراحة الأسنان", "Dentistry Services", "🦷", 12, parentId = "medicine"),
+        Category("pharmacy", "الصيدلة والأدوية", "Pharmacy & Medicine", "💊", 13, parentId = "medicine"),
+        Category("languages_edu", "تعليم لغات أجنبية", "Foreign Languages", "🗣️", 14, parentId = "education"),
+        Category("school_tutoring", "مدرسين وتقوية خصوصي", "Tutoring", "📖", 15, parentId = "education"),
+        Category("architect_eng", "هندسة معمارية وتصميم", "Architecture", "🏗️", 16, parentId = "engineering"),
+        Category("software_eng", "هندسة برمجيات وتقنية", "Software Engineering", "💻", 17, parentId = "engineering")
     )
 
     private val defaultCities = listOf(
@@ -419,7 +438,11 @@ class MainViewModel : ViewModel() {
         Provider("1", "المهندس أحمد صالح", "electricity", "sanaa", "777654321", "خبير تمديدات وتأسيس لوحات ذكية وصيانة أعطال منزلية", "شارع حدة مقابل الرشيد", 4.9, isVerified = true, isPinned = true, isSubscribed = true),
         Provider("2", "المقاول يحيى مسعد", "construction", "aden", "733987654", "مقاول تشطيبات داخلية وخارجية وأعمال ديكور ودهانات حديثة", "المنصورة الشارع العام", 4.7, isVerified = true, isPinned = true, isSubscribed = false),
         Provider("3", "الفني محمد الحاشدي", "conditioning", "taiz", "711234567", "صيانة تكييف مركزي ومكيفات اسبليت وشحن فريون أصلي", "شارع جمال بجانب بنك اليمن", 4.8, isVerified = true, isPinned = false, isSubscribed = true),
-        Provider("4", "الأستاذ خالد الوصابي", "computers", "sanaa", "771223344", "برمجة وتخطيط شبكات وصيانة هواتف ذكية وأجهزة كمبيوتر", "شارع الدائري بجوار الجامعة", 4.9, isVerified = true, isRecommended = true)
+        Provider("4", "الأستاذ خالد الوصابي", "computers", "sanaa", "771223344", "برمجة وتخطيط شبكات وصيانة هواتف ذكية وأجهزة كمبيوتر", "شارع الدائري بجوار الجامعة", 4.9, isVerified = true, isRecommended = true),
+        Provider("5", "الدكتور أمين الصبري", "medicine", "sanaa", "771122333", "استشاري طب وجراحة العيون وجراحات الليزك الدقيقة وتصحيح النظر", "شارع الزبيري أمام المستشفى الجمهوري", 4.9, isVerified = true, isPinned = true, isSubscribed = true),
+        Provider("6", "الأستاذ كمال الشرعبي", "education", "taiz", "735566777", "مدرس أول مادة الرياضيات والفيزياء ومراجعات شاملة لطلاب الثانوية العامة", "حي جمال بجوار معهد اللغات الدولي", 4.8, isVerified = true, isPinned = false, isSubscribed = true),
+        Provider("7", "المحامي عادل الجلال", "law", "sanaa", "770099887", "متخصص في صياغة العقود وتأسيس الشركات وقضايا الأراضي والنزاعات المدنية", "شارع حدة عمارة الأمل الدور الثالث", 4.9, isVerified = true, isPinned = true),
+        Provider("8", "المهندسة غيداء العريقي", "engineering", "aden", "734455661", "تصميم معماري وتخطيط داخلي وإعداد المخططات والرسومات الهندسية", "خور مكسر الشارع الخلفي أمام النيابة", 4.7, isVerified = true, isPinned = false)
     )
 
     // Flow State Collectors
@@ -1126,7 +1149,11 @@ class MainViewModel : ViewModel() {
             (cat.id == "conditioning" && (normalized.contains("مكيف") || normalized.contains("تكييف") || normalized.contains("تبريد") || normalized.contains("برد") || normalized.contains("حر"))) ||
             (cat.id == "carpentry" && (normalized.contains("نجار") || normalized.contains("نجارة") || normalized.contains("خشب") || normalized.contains("اثاث"))) ||
             (cat.id == "construction" && (normalized.contains("بناء") || normalized.contains("مقاول") || normalized.contains("دهان") || normalized.contains("اسمنت") || normalized.contains("لياسة"))) ||
-            (cat.id == "computers" && (normalized.contains("برمجة") || normalized.contains("تلفون") || normalized.contains("هاتف") || normalized.contains("جوال") || normalized.contains("كمبيوتر") || normalized.contains("شاشة") || normalized.contains("فرمته")))
+            (cat.id == "computers" && (normalized.contains("برمجة") || normalized.contains("تلفون") || normalized.contains("هاتف") || normalized.contains("جوال") || normalized.contains("كمبيوتر") || normalized.contains("شاشة") || normalized.contains("فرمته"))) ||
+            (cat.id == "medicine" && (normalized.contains("طب") || normalized.contains("طبيب") || normalized.contains("أطباء") || normalized.contains("دكتور") || normalized.contains("عيادة") || normalized.contains("مستشفى") || normalized.contains("صحة") || normalized.contains("علاج") || normalized.contains("صيدلية") || normalized.contains("أسنان"))) ||
+            (cat.id == "education" && (normalized.contains("رحلة") || normalized.contains("مدرسة") || normalized.contains("استاذ") || normalized.contains("مدرس") || normalized.contains("معلم") || normalized.contains("جامعة") || normalized.contains("تعليم") || normalized.contains("خصوصي") || normalized.contains("تدريس"))) ||
+            (cat.id == "law" && (normalized.contains("محام") || normalized.contains("محاماة") || normalized.contains("مستشار قانوني") || normalized.contains("قانون") || normalized.contains("قضية") || normalized.contains("محكمة") || normalized.contains("استشارة"))) ||
+            (cat.id == "engineering" && (normalized.contains("هندس") || normalized.contains("مهندس") || normalized.contains("معماري") || normalized.contains("مدني") || normalized.contains("استشارة هندسية") || normalized.contains("تخطيط")))
         }
         
         // Find matching city
@@ -1167,7 +1194,7 @@ class MainViewModel : ViewModel() {
         }
         
         // 3. Fallback to generic welcoming message with guidelines and rules
-        return "أهلاً بك في دليل 'كل خدمات اليمن' الشامل (المساعد الذكي يعمل بالإنترنت وبدونه 🛡️). يمكنني مساعدتك في العثور على الكهربائيين، والسباكين، والنجاريين، أو فنيي التكييف والبرمجة حتى في حال انقطاع الإنترنت. لمعلومات عن المبادرة أو رقم الدعم: 777644670. ماذا يمكنني أن أبحث لك اليوم؟"
+        return "أهلاً بك في دليل 'كل خدمات اليمن' الشامل (المساعد الذكي يعمل بالإنترنت وبدونه 🛡️). يمكنني مساعدتك في العثور على الأطباء، والمدرسين، والمهندسين، والمحامين، والكهربائيين، وكافة الحرفيين حتى في حال انقطاع الإنترنت. لمعلومات عن المبادرة أو رقم الدعم: 777644670. ماذا يمكنني أن أبحث لك اليوم؟"
     }
 
     // Gemini API Direct REST integration for the chat helper
@@ -1179,20 +1206,26 @@ class MainViewModel : ViewModel() {
         viewModelScope.launch {
             // Setup base system instruction
             val sysInstruction = "أنت مساعد ذكي متخصص في دليل 'كل خدمات اليمن' لربط الكوادر الحرفية والفنية والمهنية. أجب دائماً بالعربية وبلهجة يمنية لطيفة ومحترفة مفعمة بالأمل والتنظيم، وساعد المستخدمين في العثور على أفضل الفنيين لخدمتهم."
-            val response = try {
-                withContext(Dispatchers.IO) {
-                    val req = GenerateContentRequest(
-                        contents = listOf(
-                            Content(parts = listOf(Part(text = prompt)))
-                        ),
-                        systemInstruction = Content(parts = listOf(Part(text = sysInstruction)))
-                    )
-                    // Retrieve key safely (if you have custom settings or dummy key fallback)
-                    val key = "AIzaSy" + "DummyPlaceholder_Key_For_Runtime" 
-                    RetrofitClient.service.generateContent(key, req)
-                }
-            } catch (e: Exception) {
+            val key = "AIzaSy" + "DummyPlaceholder_Key_For_Runtime" 
+            
+            val response = if (key.contains("DummyPlaceholder")) {
+                // Instantly fail the network call and skip the 30-sec Retrofit timeout
+                kotlinx.coroutines.delay(400) // realistic typing delay
                 null
+            } else {
+                try {
+                    withContext(Dispatchers.IO) {
+                        val req = GenerateContentRequest(
+                            contents = listOf(
+                                Content(parts = listOf(Part(text = prompt)))
+                            ),
+                            systemInstruction = Content(parts = listOf(Part(text = sysInstruction)))
+                        )
+                        RetrofitClient.service.generateContent(key, req)
+                    }
+                } catch (e: Exception) {
+                    null
+                }
             }
 
             _isGeminiThinking.value = false
@@ -3868,6 +3901,7 @@ fun JoinApplicationScreen(vm: MainViewModel) {
     var area by remember { mutableStateOf("") }
     var selectedCatId by remember { mutableStateOf("plumbing") }
     var selectedCityId by remember { mutableStateOf("sanaa") }
+    var acceptedRulesMap by remember { mutableStateOf<Map<Int, Boolean>>(emptyMap()) }
 
     var selfieBase64 by remember { mutableStateOf("") }
     var isFemaleGender by remember { mutableStateOf(false) }
@@ -3961,11 +3995,50 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                         border = BorderStroke(1.dp, Color(0xFF223639)),
                         modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp)
                     ) {
-                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Column(modifier = Modifier.padding(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             settings.registrationRulesList.forEachIndexed { idx, rule ->
-                                Row(verticalAlignment = Alignment.Top) {
+                                val isMandatory = !rule.startsWith("[اختياري]")
+                                val cleanText = rule.removePrefix("[إجباري] ").removePrefix("[اختياري] ")
+                                val isChecked = acceptedRulesMap[idx] ?: false
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .clickable {
+                                            acceptedRulesMap = acceptedRulesMap.toMutableMap().apply { this[idx] = !isChecked }
+                                        }
+                                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                                ) {
+                                    Checkbox(
+                                        checked = isChecked,
+                                        onCheckedChange = { chk ->
+                                            acceptedRulesMap = acceptedRulesMap.toMutableMap().apply { this[idx] = chk ?: false }
+                                        },
+                                        colors = CheckboxDefaults.colors(checkedColor = AppTheme.primaryRed)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
                                     Text("${idx + 1}. ", color = AppTheme.primaryRed, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                    Text(rule, color = Color.White, fontSize = 10.sp, lineHeight = 13.sp)
+                                    Text(
+                                        text = cleanText,
+                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        lineHeight = 13.sp,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Surface(
+                                        color = if (isMandatory) AppTheme.primaryRed.copy(alpha = 0.2f) else Color.Gray.copy(alpha = 0.2f),
+                                        shape = RoundedCornerShape(3.dp)
+                                    ) {
+                                        Text(
+                                            text = if (isMandatory) "إجباري" else "اختياري",
+                                            color = if (isMandatory) AppTheme.primaryRed else Color.LightGray,
+                                            fontSize = 8.sp,
+                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -4288,7 +4361,16 @@ fun JoinApplicationScreen(vm: MainViewModel) {
 
                 Button(
                     onClick = {
-                        if (name.isBlank() || phone.isBlank() || area.isBlank() || description.isBlank()) {
+                        // Locate outstanding mandatory conditions
+                        val missingMandatories = settings.registrationRulesList.mapIndexedNotNull { idx, rule ->
+                            val isMandatory = !rule.startsWith("[اختياري]")
+                            val isChecked = acceptedRulesMap[idx] ?: false
+                            if (isMandatory && !isChecked) rule.removePrefix("[إجباري] ").removePrefix("[اختياري] ") else null
+                        }
+
+                        if (missingMandatories.isNotEmpty()) {
+                            Toast.makeText(context, "الرجاء الموافقة على الشرط الإجباري أولاً: ${missingMandatories.first()}", Toast.LENGTH_LONG).show()
+                        } else if (name.isBlank() || phone.isBlank() || area.isBlank() || description.isBlank()) {
                             Toast.makeText(context, "الرجاء تعبئة كامل الحقول للمراجعة والدراسة", Toast.LENGTH_SHORT).show()
                         } else if (selfieBase64.isBlank()) {
                             val alertMessage = if (isFemaleGender) "الرجاء تحديد/تحميل صورة ترمز لمهنتك وحرفتك لتسهيل التعرف عليها بواسطة عملائك!" else "الرجاء التقاط صورتك السيلفي فورياً أو اختيارها من الذاكرة كشرط إلزامي للتوثيق والاعتماد!"
@@ -6539,166 +6621,128 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
 
     var inlineRulesList by remember(settings.registrationRulesList) { mutableStateOf(settings.registrationRulesList) }
     var ruleNewCandidateText by remember { mutableStateOf("") }
+    var inlinePresetsList by remember(settings.colorsPresetsList) { mutableStateOf(settings.colorsPresetsList) }
+    var editingPresetIndex by remember { mutableStateOf<Int?>(null) }
+    var newPresetName by remember { mutableStateOf("") }
+    var isNewRuleMandatory by remember { mutableStateOf(true) }
 
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         
         Card(colors = CardDefaults.cardColors(containerColor = AppTheme.surfaceDark)) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("🎨 لوحات الألوان والسمات الجاهزة وتغيير الألوان (الأحمر، الأزرق، واللون المميز):", color = AppTheme.accentGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Button(
-                        onClick = {
-                            primaryColorField = "#CE1126"
-                            accentColorField = "#FFD700"
-                            bgColorField = "#0D1B1E"
-                            surfaceColorField = "#162A2D"
-                            Toast.makeText(context, "تم تعيين باليت صقور اليمن الكلاسيكي باللون الأحمر الرائع!", Toast.LENGTH_SHORT).show()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFCE1126)),
-                        modifier = Modifier.weight(1f).height(38.dp),
-                        contentPadding = PaddingValues(0.dp)
+                Text("🎨 لوحات الألوان والسمات الجاهزة وتخصيصها (حذف، تعديل، أو إضافة ألوان جديدة):", color = AppTheme.accentGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                
+                // Active list representation
+                inlinePresetsList.forEachIndexed { index, preset ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("🦅 اليمن الأحمر", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                    }
+                        Button(
+                            onClick = {
+                                primaryColorField = preset.primaryHex
+                                accentColorField = preset.accentHex
+                                bgColorField = preset.bgHex
+                                surfaceColorField = preset.surfaceHex
+                                Toast.makeText(context, "تم تطبيق لوحة ${preset.name} بنجاح!", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = safeParseColor(preset.primaryHex, AppTheme.primaryRed)
+                            ),
+                            modifier = Modifier.weight(1f).height(38.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp)
+                        ) {
+                            Text(
+                                text = preset.name,
+                                color = safeParseColor(preset.accentHex, Color.White),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
 
-                    Button(
-                        onClick = {
-                            primaryColorField = "#0D47A1"
-                            accentColorField = "#00E5FF"
-                            bgColorField = "#0A192F"
-                            surfaceColorField = "#172A45"
-                            Toast.makeText(context, "تم تعيين السمة المفتوحة باللون الأزرق الملكي الراقي!", Toast.LENGTH_SHORT).show()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0D47A1)),
-                        modifier = Modifier.weight(1f).height(38.dp),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text("🔵 الأزرق الملكي", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                    }
+                        Spacer(modifier = Modifier.width(6.dp))
 
-                    Button(
-                        onClick = {
-                            primaryColorField = "#FF1744"
-                            accentColorField = "#FFEB3B"
-                            bgColorField = "#1C0D0E"
-                            surfaceColorField = "#2D1719"
-                            Toast.makeText(context, "تم تعيين السمة البركانية باللون الأحمر المتوهج الجديد!", Toast.LENGTH_SHORT).show()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF1744)),
-                        modifier = Modifier.weight(1f).height(38.dp),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text("🔴 الأحمر المتوهج", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                    }
+                        IconButton(onClick = {
+                            editingPresetIndex = index
+                            newPresetName = preset.name
+                            primaryColorField = preset.primaryHex
+                            accentColorField = preset.accentHex
+                            bgColorField = preset.bgHex
+                            surfaceColorField = preset.surfaceHex
+                            Toast.makeText(context, "تم جلب بيانات ${preset.name} للتعديل بالأسفل!", Toast.LENGTH_SHORT).show()
+                        }, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.Default.Edit, contentDescription = "تعديل", tint = AppTheme.accentGold, modifier = Modifier.size(16.dp))
+                        }
 
-                    Button(
-                        onClick = {
-                            primaryColorField = "#FFB300"
-                            accentColorField = "#00E5FF"
-                            bgColorField = "#1A1710"
-                            surfaceColorField = "#2D281D"
-                            Toast.makeText(context, "تم تطبيق السمة الذهبية المميزة (بريق بلقيس) بنجاح!", Toast.LENGTH_SHORT).show()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE5A900)),
-                        modifier = Modifier.weight(1f).height(38.dp),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text("✨ السمة المميزة", color = Color.Black, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-                Spacer(modifier = Modifier.height(2.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Button(
-                        onClick = {
-                            primaryColorField = "#9E9E9E"
-                            accentColorField = "#E0E0E0"
-                            bgColorField = "#121212"
-                            surfaceColorField = "#1C1C1C"
-                            Toast.makeText(context, "تم تطبيق سمة كوزميك سيلفر الفضية الهادئة!", Toast.LENGTH_SHORT).show()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9E9E9E)),
-                        modifier = Modifier.weight(1f).height(38.dp),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text("🌌 كوزميك سيلفر", color = Color.Black, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                    }
-
-                    Button(
-                        onClick = {
-                            primaryColorField = "#D4AF37"
-                            accentColorField = "#FFD700"
-                            bgColorField = "#1A1A1A"
-                            surfaceColorField = "#2D2D2D"
-                            Toast.makeText(context, "تم تطبيق سمة الذهبي الفاخر الكلاسيكية العريقة!", Toast.LENGTH_SHORT).show()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD4AF37)),
-                        modifier = Modifier.weight(1f).height(38.dp),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text("✨ ذهبي فاخر", color = Color.Black, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                    }
-
-                    Button(
-                        onClick = {
-                            primaryColorField = "#004B49"
-                            accentColorField = "#50C878"
-                            bgColorField = "#0C1814"
-                            surfaceColorField = "#152A20"
-                            Toast.makeText(context, "تم تطبيق سمة الزمردي الراقي الأنيق!", Toast.LENGTH_SHORT).show()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF004B49)),
-                        modifier = Modifier.weight(1f).height(38.dp),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text("🟢 زمردي راقي", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                        IconButton(onClick = {
+                            val updatedList = inlinePresetsList.toMutableList()
+                            updatedList.removeAt(index)
+                            inlinePresetsList = updatedList
+                            Toast.makeText(context, "تم حذف باليت ${preset.name} مؤقتاً، اضغط حفظ بالأسفل للتأكيد سحابياً!", Toast.LENGTH_SHORT).show()
+                        }, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.Default.Delete, contentDescription = "حذف", tint = AppTheme.primaryRed, modifier = Modifier.size(16.dp))
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(2.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Button(
-                        onClick = {
-                            primaryColorField = "#3A3F47"
-                            accentColorField = "#A0A5B0"
-                            bgColorField = "#151515"
-                            surfaceColorField = "#22252A"
-                            Toast.makeText(context, "تم تطبيق سمة الأسود الدخاني الراقي!", Toast.LENGTH_SHORT).show()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF151515)),
-                        modifier = Modifier.weight(1f).height(38.dp),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text("🕶️ أسود دخاني", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                    }
+                Divider(color = Color(0xFF223639), modifier = Modifier.padding(vertical = 4.dp))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = newPresetName,
+                        onValueChange = { newPresetName = it },
+                        label = { Text("اسم لوحة الألوان الجديدة/المعدلة...") },
+                        modifier = Modifier.weight(1f),
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                        textStyle = TextStyle(fontSize = 11.sp)
+                    )
 
                     Button(
                         onClick = {
-                            primaryColorField = "#FF8DA1"
-                            accentColorField = "#FFC0CB"
-                            bgColorField = "#1A0D10"
-                            surfaceColorField = "#2D191D"
-                            Toast.makeText(context, "تم تطبيق سمة الزهري الفاتح الجميلة!", Toast.LENGTH_SHORT).show()
+                            if (newPresetName.isNotBlank()) {
+                                val updatedList = inlinePresetsList.toMutableList()
+                                val newPreset = PresetPalette(
+                                    name = newPresetName,
+                                    primaryHex = primaryColorField,
+                                    accentHex = accentColorField,
+                                    bgHex = bgColorField,
+                                    surfaceHex = surfaceColorField
+                                )
+                                if (editingPresetIndex != null && editingPresetIndex!! < updatedList.size) {
+                                    updatedList[editingPresetIndex!!] = newPreset
+                                    editingPresetIndex = null
+                                    Toast.makeText(context, "تم تعديل لوحة الألوان بنجاح!", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    updatedList.add(newPreset)
+                                    Toast.makeText(context, "تم إضافة لوحة الألوان الحالية للقائمة الحية!", Toast.LENGTH_SHORT).show()
+                                }
+                                inlinePresetsList = updatedList
+                                newPresetName = ""
+                            } else {
+                                Toast.makeText(context, "الرجاء كتابة اسم للوحة الألوان أولاً!", Toast.LENGTH_SHORT).show()
+                            }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF8DA1)),
-                        modifier = Modifier.weight(1f).height(38.dp),
-                        contentPadding = PaddingValues(0.dp)
+                        colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
+                        modifier = Modifier.height(38.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp)
                     ) {
-                        Text("🌸 زهري فاتح", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                        Text(if (editingPresetIndex != null) "تحديث ✏️" else "إضافة + 🎨", color = Color.White, fontSize = 9.sp)
                     }
 
-                    Button(
-                        onClick = {
-                            primaryColorField = "#E6C280"
-                            accentColorField = "#D4AF37"
-                            bgColorField = "#FFFDF9"
-                            surfaceColorField = "#FFF9EE"
-                            Toast.makeText(context, "تم تطبيق سمة الأبيض الذهبي الملكية الحصرية!", Toast.LENGTH_SHORT).show()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFF9EE)),
-                        modifier = Modifier.weight(1f).height(38.dp),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text("👑 أبيض ذهبي", color = Color(0xFFD4AF37), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                    if (editingPresetIndex != null) {
+                        IconButton(onClick = {
+                            editingPresetIndex = null
+                            newPresetName = ""
+                        }, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.Default.Close, contentDescription = "إلغاء التعديل", tint = Color.Red, modifier = Modifier.size(16.dp))
+                        }
                     }
                 }
             }
@@ -7081,21 +7125,57 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
 
         Card(colors = CardDefaults.cardColors(containerColor = AppTheme.surfaceDark)) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("📜 إدارة وتعديل شروط تسجيل واعتماد مزودي الخدمات", color = AppTheme.accentGold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Text("📜 إدارة وتعديل شروط تسجيل واعتماد مزودي الخدمات (تحديد إجباري/اختياري):", color = AppTheme.accentGold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
 
                 inlineRulesList.forEachIndexed { index, rule ->
-                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    val isMandatory = !rule.startsWith("[اختياري]")
+                    val cleanText = rule.removePrefix("[إجباري] ").removePrefix("[اختياري] ")
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         OutlinedTextField(
-                            value = rule,
+                            value = cleanText,
                             onValueChange = { editedText ->
                                 val updatedList = inlineRulesList.toMutableList()
-                                updatedList[index] = editedText
+                                val prefix = if (isMandatory) "[إجباري] " else "[اختياري] "
+                                updatedList[index] = prefix + editedText
                                 inlineRulesList = updatedList
                             },
                             modifier = Modifier.weight(1f),
                             colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
                             textStyle = TextStyle(fontSize = 11.sp)
                         )
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        // Toggle condition type button
+                        Button(
+                            onClick = {
+                                val updatedList = inlineRulesList.toMutableList()
+                                val newPrefix = if (isMandatory) "[اختياري] " else "[إجباري] "
+                                updatedList[index] = newPrefix + cleanText
+                                inlineRulesList = updatedList
+                                Toast.makeText(context, "تم تغيير نوع الشرط!", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isMandatory) AppTheme.primaryRed.copy(alpha = 0.2f) else Color.Gray.copy(alpha = 0.2f)
+                            ),
+                            contentPadding = PaddingValues(horizontal = 6.dp),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Text(
+                                text = if (isMandatory) "إجباري 📋" else "اختياري 💡",
+                                color = if (isMandatory) AppTheme.primaryRed else Color.LightGray,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(4.dp))
+
                         IconButton(onClick = {
                             val updatedList = inlineRulesList.toMutableList()
                             updatedList.removeAt(index)
@@ -7109,6 +7189,36 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
 
                 Divider(color = Color(0xFF223639), modifier = Modifier.padding(vertical = 4.dp))
 
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text("حدد حالة وتصنيف الشرط الجديد:", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Row(
+                        modifier = Modifier.clickable { isNewRuleMandatory = true },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = isNewRuleMandatory,
+                            onClick = { isNewRuleMandatory = true },
+                            colors = RadioButtonDefaults.colors(selectedColor = AppTheme.accentGold)
+                        )
+                        Text("إجباري 📋", color = Color.White, fontSize = 11.sp)
+                    }
+                    Row(
+                        modifier = Modifier.clickable { isNewRuleMandatory = false },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = !isNewRuleMandatory,
+                            onClick = { isNewRuleMandatory = false },
+                            colors = RadioButtonDefaults.colors(selectedColor = AppTheme.accentGold)
+                        )
+                        Text("اختياري 💡", color = Color.White, fontSize = 11.sp)
+                    }
+                }
+
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
                         value = ruleNewCandidateText,
@@ -7120,7 +7230,8 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
                     IconButton(onClick = {
                         if (ruleNewCandidateText.isNotBlank()) {
                             val updatedList = inlineRulesList.toMutableList()
-                            updatedList.add(ruleNewCandidateText)
+                            val prefix = if (isNewRuleMandatory) "[إجباري] " else "[اختياري] "
+                            updatedList.add(prefix + ruleNewCandidateText)
                             inlineRulesList = updatedList
                             ruleNewCandidateText = ""
                             Toast.makeText(context, "تم إدراج الشرط الجديد للقائمة!", Toast.LENGTH_SHORT).show()
@@ -7148,6 +7259,7 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
                     bgColorHex = upBg,
                     surfaceColorHex = upSurf,
                     registrationRulesList = inlineRulesList,
+                    colorsPresetsList = inlinePresetsList,
                     maxPortfolioImages = maxPortImagesVal.toIntOrNull() ?: 5,
                     chatIconSize = cSizeValue.toInt(),
                     chatIconColorHex = cColField,
@@ -7201,8 +7313,8 @@ fun SmartAssistantSheet(
     onClose: () -> Unit,
     fontFamily: FontFamily
 ) {
-    val geminiHistory by vm.geminiMessages.collectAsStateWithLifecycle()
-    val isThinking by vm.isGeminiThinking.collectAsStateWithLifecycle()
+    val geminiHistory by vm.geminiMessages.collectAsState()
+    val isThinking by vm.isGeminiThinking.collectAsState()
     var promptInput by remember { mutableStateOf("") }
     val lazyListState = rememberLazyListState()
 
