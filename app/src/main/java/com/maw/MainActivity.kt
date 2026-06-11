@@ -124,7 +124,11 @@ data class Provider(
     val deviceId: String = "admin",
     val imageUrl: String = "",
     val portfolioImages: List<String> = emptyList(),
-    val orderPriority: Int = 0
+    val orderPriority: Int = 0,
+    val isPortfolioEnabled: Boolean = true,
+    val isPortfolioUploadEnabled: Boolean = true,
+    val allowedImageCount: Int = 10,
+    val skills: String = ""
 )
 
 @Serializable
@@ -140,7 +144,8 @@ data class PendingProvider(
     val selfieImageBase64: String = "",
     val isFemale: Boolean = false,
     val portfolioImages: List<String> = emptyList(),
-    val orderPriority: Int = 0
+    val orderPriority: Int = 0,
+    val skills: String = ""
 )
 
 @Serializable
@@ -348,7 +353,10 @@ data class AppSettings(
     val aboutVersionVisible: Boolean = true,
     val aboutSecurityLabel: String = "مستوى التشفير والحقن:",
     val aboutSecurityValue: String = "تشفير آمن سحابي",
-    val aboutSecurityVisible: Boolean = true
+    val aboutSecurityVisible: Boolean = true,
+    val geminiApiKey: String = "",
+    val isPortfolioFeatureGloballyEnabled: Boolean = true,
+    val isPortfolioUploadGloballyAllowed: Boolean = true
 )
 
 // --- GEMINI DIRECT REST IMPLEMENTATION SCHEMAS ---
@@ -694,6 +702,10 @@ class MainViewModel : ViewModel() {
                             val abSecVal = snapshot.getString("aboutSecurityValue") ?: "تشفير آمن سحابي"
                             val abSecVis = snapshot.getBoolean("aboutSecurityVisible") ?: true
 
+                            val gKey = snapshot.getString("geminiApiKey") ?: ""
+                            val portFeatureEnabled = snapshot.getBoolean("isPortfolioFeatureGloballyEnabled") ?: true
+                            val portUploadAllowed = snapshot.getBoolean("isPortfolioUploadGloballyAllowed") ?: true
+
                             @Suppress("UNCHECKED_CAST")
                             val blockedKeys = snapshot.get("blockedKeywords") as? List<String> ?: listOf("كلب", "حمار", "سيئ", "نصاب")
 
@@ -763,7 +775,10 @@ class MainViewModel : ViewModel() {
                                 aboutVersionVisible = abVerVis,
                                 aboutSecurityLabel = abSecLbl,
                                 aboutSecurityValue = abSecVal,
-                                aboutSecurityVisible = abSecVis
+                                aboutSecurityVisible = abSecVis,
+                                geminiApiKey = gKey,
+                                isPortfolioFeatureGloballyEnabled = portFeatureEnabled,
+                                isPortfolioUploadGloballyAllowed = portUploadAllowed
                             )
                         }
                     }
@@ -1228,9 +1243,19 @@ class MainViewModel : ViewModel() {
         viewModelScope.launch {
             // Setup base system instruction
             val sysInstruction = "أنت مساعد ذكي متخصص في دليل 'كل خدمات اليمن' لربط الكوادر الحرفية والفنية والمهنية. أجب دائماً بالعربية وبلهجة يمنية لطيفة ومحترفة مفعمة بالأمل والتنظيم، وساعد المستخدمين في العثور على أفضل الفنيين لخدمتهم."
-            val key = "AIzaSy" + "DummyPlaceholder_Key_For_Runtime" 
             
-            val response = if (key.contains("DummyPlaceholder")) {
+            var key = _settings.value.geminiApiKey.trim()
+            if (key.isBlank() || key.contains("DummyPlaceholder")) {
+                key = try {
+                    val clazz = Class.forName("com.maw.BuildConfig")
+                    val field = clazz.getField("GEMINI_API_KEY")
+                    (field.get(null) as? String)?.trim() ?: ""
+                } catch (e: Exception) {
+                    ""
+                }
+            }
+            
+            val response = if (key.isBlank() || key.contains("DummyPlaceholder") || key.contains("YOUR_ACTUAL_")) {
                 // Instantly fail the network call and skip the 30-sec Retrofit timeout
                 kotlinx.coroutines.delay(400) // realistic typing delay
                 null
@@ -2385,6 +2410,7 @@ fun ProfessionalCategoryFilterComponent(
     var ratingProviderTarget by remember { mutableStateOf<Provider?>(null) }
     var viewReviewsTarget by remember { mutableStateOf<Provider?>(null) }
     var bookingProviderTarget by remember { mutableStateOf<Provider?>(null) }
+    var profileProviderTarget by remember { mutableStateOf<Provider?>(null) }
 
     Column(
         modifier = Modifier
@@ -2761,11 +2787,22 @@ fun ProfessionalCategoryFilterComponent(
                         onRateClick = { ratingProviderTarget = item },
                         onViewReviewsClick = { viewReviewsTarget = item },
                         onBookClick = { bookingProviderTarget = item },
+                        onProfileClick = { profileProviderTarget = item },
                         fontFamily = fontFamily
                     )
                 }
             }
         }
+    }
+
+    // Professional profile details dialog
+    profileProviderTarget?.let { provider ->
+        ProfessionalProfileDialog(
+            provider = provider,
+            vm = vm,
+            onDismiss = { profileProviderTarget = null },
+            fontFamily = fontFamily
+        )
     }
 
     // Rating dialog
@@ -2813,6 +2850,7 @@ fun ProfessionalCardRow(
     onRateClick: () -> Unit,
     onViewReviewsClick: () -> Unit,
     onBookClick: () -> Unit,
+    onProfileClick: () -> Unit,
     fontFamily: FontFamily
 ) {
     val context = LocalContext.current
@@ -2822,7 +2860,9 @@ fun ProfessionalCardRow(
         ),
         border = if (provider.isPinned) BorderStroke(1.5.dp, AppTheme.accentGold) else null,
         shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onProfileClick() }
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
@@ -2843,6 +2883,14 @@ fun ProfessionalCardRow(
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
+                        fontFamily = fontFamily
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "👤 الملف والمعرض ◀",
+                        color = AppTheme.accentGold,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
                         fontFamily = fontFamily
                     )
                 }
@@ -2974,6 +3022,414 @@ fun ProfessionalCardRow(
                 Icon(Icons.Default.EventNote, contentDescription = "Book Appointment", modifier = Modifier.size(12.dp), tint = Color.White)
                 Spacer(modifier = Modifier.width(6.dp))
                 Text("🗓️ حجز موعد خدمة فوري ومباشر", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White, fontFamily = fontFamily)
+            }
+        }
+    }
+}
+
+// OUR NEW STUNNING METICULOUSLY CRAFTED PROFILE VIEW
+@Composable
+fun ProfessionalProfileDialog(
+    provider: Provider,
+    vm: MainViewModel,
+    onDismiss: () -> Unit,
+    fontFamily: FontFamily
+) {
+    val context = LocalContext.current
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    var lightboxImageBase64 by remember { mutableStateOf<String?>(null) }
+
+    // Resolve skills
+    val skillsList = remember(provider.skills, provider.category) {
+        if (provider.skills.isNotBlank()) {
+            provider.skills.split(Regex("[,،\n]")).map { it.trim() }.filter { it.isNotEmpty() }
+        } else {
+            when (provider.category.lowercase()) {
+                "electricity" -> listOf("تمديدات منزلية", "صيانة لوحات كهرباء", "تركيب خطوط الطاقة الشمسية", "تأمين التوصيلات", "تأسيس شبكات ذكية")
+                "plumbing" -> listOf("سباكة وصيانة صحية", "تركيب مغاسل وخلاطات", "تسليك المجاري والانسدادات", "كشف تسريب المياه", "صيانة مضخات خزان")
+                "maintenance" -> listOf("صيانة عامة للأجهزة", "تصليح أعطال ذكية", "تركيب معدات وشاشات", "كشف شامل على الكفاءة")
+                "carpentry" -> listOf("نجارة وأثاث وديكور", "تفصيل غرف ودواليب", "تصليح الأبواب والمفصلات", "صيانة أخشاب ومطابخ")
+                "conditioning" -> listOf("تركيب مكيفات اسبليت", "شحن فريون أصلي", "تنظيف الفلاتر والوحدات", "صيانة التكييف المركزي")
+                "construction" -> listOf("مقاولات وأعمال بناء", "أعمال دهان وديكورات", "لياسة وترميم فلل", "مقاولات تشطيب متكامل")
+                "computers" -> listOf("صيانة قطع ومكونات", "برمجة السوفتوير للأندرويد", "تنزيل أنظمة وتعريفات", "صيانة هواتف وشاشات")
+                "medicine" -> listOf("استشارة طبية موثقة", "رعاية وتتبع صحي", "خبرة عيادية وأعمال طوارئ")
+                "education" -> listOf("تدريب وتقوية مهارات", "مراجعة امتحانات وتلخيص", "استراتيجيات تعليم حديثة")
+                "law" -> listOf("استشارات قانونية", "صياغة عقود تجارية", "مرافعة وتمثيل وتحكيم")
+                "engineering" -> listOf("تصميم ومخططات هندسية", "حساب الكميات والتكاليف", "إشراف على سير المشاريع")
+                else -> listOf("صيانة وتأسيس مهني شامل", "جودة وموثوقية عالية", "حلول سريعة وضمان معتمد")
+            }
+        }
+    }
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = AppTheme.surfaceDark),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.5.dp, AppTheme.accentGold),
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.85f)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(14.dp)
+            ) {
+                // Header (Name + Category Badge + Close button)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // User Avatar circular badge
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(AppTheme.accentGold.copy(alpha = 0.15f))
+                                .border(1.5.dp, AppTheme.accentGold, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (provider.name.isNotBlank()) provider.name.take(1) else "👨",
+                                color = AppTheme.accentGold,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = fontFamily
+                            )
+                        }
+
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = provider.name,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    fontFamily = fontFamily
+                                )
+                                if (provider.isVerified) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = "Verified Member",
+                                        tint = AppTheme.accentGold,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "📍 ${provider.city} • ${provider.area}",
+                                color = AppTheme.grayText,
+                                fontSize = 11.sp,
+                                fontFamily = fontFamily
+                            )
+                        }
+                    }
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = AppTheme.primaryRed
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+                Divider(color = Color(0xFF223639), thickness = 1.dp)
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Scrollable Content Pane
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // 1. Definition / About section
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F2225)),
+                        border = BorderStroke(1.dp, Color(0xFF223639)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(
+                                text = "👤 نبذة تعريفية بالدليل المهني:",
+                                color = AppTheme.accentGold,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = fontFamily,
+                                modifier = Modifier.padding(bottom = 4.dp)
+                            )
+                            Text(
+                                text = provider.description.ifBlank { "لم يقم هذا العضو بكتابة نبذة تعريفية بعد، ولكن تواصله الفوري متاح وجودته مضمونة." },
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp,
+                                fontFamily = fontFamily
+                            )
+                        }
+                    }
+
+                    // 2. Skills list section
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F2225)),
+                        border = BorderStroke(1.dp, Color(0xFF223639)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(
+                                text = "⚡ المهارات والخبرات الممتازة:",
+                                color = AppTheme.accentGold,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = fontFamily,
+                                modifier = Modifier.padding(bottom = 6.dp)
+                            )
+                            
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    skillsList.chunked(2).forEach { pair ->
+                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            pair.forEach { skill ->
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(6.dp))
+                                                        .background(AppTheme.primaryRed.copy(alpha = 0.12f))
+                                                        .border(1.dp, AppTheme.primaryRed.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "✓ $skill",
+                                                        color = Color.White,
+                                                        fontSize = 10.sp,
+                                                        fontFamily = fontFamily
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 3. Portfolio models gallery
+                    val isFeatureEnabled = settings.isPortfolioFeatureGloballyEnabled && provider.isPortfolioEnabled
+                    if (isFeatureEnabled) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F2225)),
+                            border = BorderStroke(1.dp, Color(0xFF223639)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text(
+                                    text = "🎨 معرض صور نماذج الأعمال والمشاريع السابقة:",
+                                    color = AppTheme.accentGold,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = fontFamily,
+                                    modifier = Modifier.padding(bottom = 6.dp)
+                                )
+
+                                val portfolioToRender = provider.portfolioImages.take(provider.allowedImageCount)
+
+                                if (portfolioToRender.isEmpty()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(80.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "🛡️ المعرض فارغ حالياً - لم يتم رفع ملفات بعد.",
+                                            color = Color.Gray,
+                                            fontSize = 10.sp,
+                                            fontFamily = fontFamily
+                                        )
+                                    }
+                                } else {
+                                    LazyRow(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        items(portfolioToRender) { base64 ->
+                                            val bitmap = rememberBase64Bitmap(base64)
+                                            bitmap?.let {
+                                                Card(
+                                                    modifier = Modifier
+                                                        .size(80.dp)
+                                                        .clickable { lightboxImageBase64 = base64 },
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    border = BorderStroke(1.2.dp, AppTheme.accentGold.copy(alpha = 0.6f))
+                                                ) {
+                                                    Image(
+                                                        bitmap = it.asImageBitmap(),
+                                                        contentDescription = "Work sample click to zoom",
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        contentScale = ContentScale.Crop
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "* إرشادات: انقر على أي صورة أعلاه لفتحها بالكامل بجودة فائقة.",
+                                        color = Color.Gray,
+                                        fontSize = 8.sp,
+                                        fontFamily = fontFamily
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        if (!settings.isPortfolioFeatureGloballyEnabled) {
+                            Text(
+                                text = "🔒 ميزة معرض أعمال ومنشورات المهنيين معطلة مؤقتاً بواسطة المشرف العام.",
+                                color = Color.Gray,
+                                fontSize = 9.sp,
+                                fontFamily = fontFamily,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Divider(color = Color(0xFF223639), thickness = 1.dp)
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Bottom Direct Contact Row
+                Text(
+                    text = "👇 قنوات التواصل الفوري والمباشر مع الكادر:",
+                    color = AppTheme.accentGold,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = fontFamily,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${provider.phone}"))
+                            context.startActivity(intent)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(40.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Phone, contentDescription = "Call", tint = Color.White, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("إتصال مباشر", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = fontFamily)
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            if (!settings.isChatEnabled) {
+                                Toast.makeText(context, "🚫 ${settings.chatDisabledMessage}", Toast.LENGTH_LONG).show()
+                            } else {
+                                vm.startChatWithProvider("user_visitor", provider.id, provider.name)
+                                vm.navigationTargetTab.value = 2
+                                onDismiss()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F2225)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .weight(1.1f)
+                            .height(40.dp)
+                            .border(1.dp, AppTheme.accentGold, RoundedCornerShape(8.dp))
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Chat, contentDescription = "Safe Chat", tint = AppTheme.accentGold, modifier = Modifier.size(15.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("دردشة آمنة", color = AppTheme.accentGold, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = fontFamily)
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            val cleanNo = provider.phone.trim().replace("+", "").replace(" ", "")
+                            val launchNo = if (cleanNo.startsWith("7")) "967$cleanNo" else cleanNo
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://api.whatsapp.com/send?phone=$launchNo&text=مرحباً يا غالي، رأيت ملفك الشخصي بالدليل الشامل وحابب أستأجر خدمتك."))
+                            try {
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "الواتساب غير مثبت على هاتفك!", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(40.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Share, contentDescription = "WhatsApp", tint = Color.White, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("واتساب", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = fontFamily)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    lightboxImageBase64?.let { base64 ->
+        androidx.compose.ui.window.Dialog(onDismissRequest = { lightboxImageBase64 = null }) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.95f)),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.5.dp, AppTheme.accentGold),
+                modifier = Modifier
+                    .fillMaxWidth(0.96f)
+                    .fillMaxHeight(0.7f)
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    val bitmap = rememberBase64Bitmap(base64)
+                    bitmap?.let {
+                        Image(
+                            bitmap = it.asImageBitmap(),
+                            contentDescription = "Zoomed model preview",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(10.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { lightboxImageBase64 = null },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(12.dp)
+                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Close zoom", tint = Color.White)
+                    }
+                }
             }
         }
     }
@@ -3205,17 +3661,40 @@ fun getProviderCoordinates(provider: Provider): Pair<Double, Double> {
         "aden" -> Pair(12.7855, 45.0186)
         "taiz" -> Pair(13.5794, 44.0205)
         "hodeidah" -> Pair(14.7979, 42.9530)
-        "hadramout" -> Pair(14.4000, 49.0)
+        "hadramout" -> Pair(14.4000, 49.0000)
         "ibb" -> Pair(13.9745, 44.1802)
         else -> Pair(15.3533, 44.2074)
     }
-    // Deterministic offset based on ID to scatter points beautifully
-    val stepIndex = provider.id.hashCode() % 12
-    val angle = stepIndex * (2 * Math.PI / 12)
-    val radius = 0.015 + (provider.id.hashCode() % 5) * 0.008
-    val offsetLat = Math.sin(angle) * radius
-    val offsetLon = Math.cos(angle) * radius
-    return Pair(base.first + offsetLat, base.second + offsetLon)
+    
+    val areaLower = provider.area.trim()
+    val areaOffset = when {
+        areaLower.contains("حدة") || areaLower.contains("حده") -> Pair(-0.018, -0.012)
+        areaLower.contains("السبعين") -> Pair(-0.022, 0.005)
+        areaLower.contains("الدائري") || areaLower.contains("الجامعة") || areaLower.contains("الجامعه") -> Pair(0.002, -0.008)
+        areaLower.contains("الحصبة") || areaLower.contains("الحصبه") -> Pair(0.025, 0.003)
+        areaLower.contains("التحرير") -> Pair(0.005, 0.001)
+        areaLower.contains("الروضة") || areaLower.contains("الروضه") -> Pair(0.045, 0.015)
+        areaLower.contains("الأصبحي") || areaLower.contains("الاصبحي") -> Pair(-0.035, 0.010)
+        areaLower.contains("المنصورة") || areaLower.contains("المنصوره") -> Pair(0.005, 0.012)
+        areaLower.contains("خور مكسر") || areaLower.contains("خورمكسر") -> Pair(-0.010, 0.035)
+        areaLower.contains("الكريتر") || areaLower.contains("كريتر") -> Pair(-0.028, 0.052)
+        areaLower.contains("الشيخ عثمان") -> Pair(0.025, 0.025)
+        areaLower.contains("جمال") -> Pair(-0.002, -0.005)
+        else -> {
+            val areaHash = if (areaLower.hashCode() == Int.MIN_VALUE) 0 else if (areaLower.hashCode() < 0) -areaLower.hashCode() else areaLower.hashCode()
+            val angle = (areaHash % 360) * (Math.PI / 180.0)
+            val dist = 0.006 + (areaHash % 25) * 0.0004
+            Pair(Math.sin(angle) * dist, Math.cos(angle) * dist)
+        }
+    }
+
+    // Tiny micro-dispersion so duplicates in the same area do not overlap exactly
+    val individualAngle = (provider.id.hashCode() % 12) * (2 * Math.PI / 12)
+    val individualRadius = 0.0012 // ~120 meters maximum offset
+    val miniLat = Math.sin(individualAngle) * individualRadius
+    val miniLon = Math.cos(individualAngle) * individualRadius
+
+    return Pair(base.first + areaOffset.first + miniLat, base.second + areaOffset.second + miniLon)
 }
 
 // --- TAB 1: INTERACTIVE GEOGRAPHIC MAP VIEW (YEMEN RADAR) ---
@@ -3230,6 +3709,7 @@ fun MockMapViewScreen(vm: MainViewModel) {
     
     // Virtual appointment reservation target on map
     var bookingProviderTargetOnMap by remember { mutableStateOf<Provider?>(null) }
+    var profileProviderTargetOnMap by remember { mutableStateOf<Provider?>(null) }
 
     val userCoords = when (selectedUserCityId.lowercase()) {
         "sanaa" -> Pair(15.3533, 44.2074)
@@ -3474,6 +3954,7 @@ fun MockMapViewScreen(vm: MainViewModel) {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .clickable { profileProviderTargetOnMap = p }
                     .padding(10.dp),
                 colors = CardDefaults.cardColors(containerColor = AppTheme.surfaceDark),
                 border = BorderStroke(1.dp, AppTheme.accentGold.copy(alpha = 0.6f)),
@@ -3489,6 +3970,8 @@ fun MockMapViewScreen(vm: MainViewModel) {
                             Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color.Green))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(p.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("👤 الملف والمعرض ◀", color = AppTheme.accentGold, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                         }
                         IconButton(
                             onClick = { selectedProviderForMap = null },
@@ -3572,6 +4055,16 @@ fun MockMapViewScreen(vm: MainViewModel) {
                 bookingProviderTargetOnMap = null
                 selectedProviderForMap = null
             },
+            fontFamily = FontFamily.Default
+        )
+    }
+
+    // Capture profile show directly from radar map
+    profileProviderTargetOnMap?.let { provider ->
+        ProfessionalProfileDialog(
+            provider = provider,
+            vm = vm,
+            onDismiss = { profileProviderTargetOnMap = null },
             fontFamily = FontFamily.Default
         )
     }
@@ -7524,7 +8017,7 @@ fun SmartAssistantSheet(
     }
 
     Box(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize().imePadding()
     ) {
         // Backdrop overlay sibling
         Box(
@@ -7661,8 +8154,8 @@ fun SmartAssistantSheet(
                                 Text(
                                     text = message,
                                     color = Color.White,
-                                    fontSize = 11.sp,
-                                    lineHeight = 14.sp,
+                                    fontSize = 13.sp,
+                                    lineHeight = 18.sp,
                                     fontFamily = fontFamily
                                 )
                             }
