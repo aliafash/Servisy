@@ -128,7 +128,23 @@ data class Provider(
     val isPortfolioEnabled: Boolean = true,
     val isPortfolioUploadEnabled: Boolean = true,
     val allowedImageCount: Int = 10,
-    val skills: String = ""
+    val skills: String = "",
+    val nationalIdImageBase64: String = ""
+)
+
+@Serializable
+data class Appointment(
+    val id: String = "",
+    val providerId: String = "",
+    val providerName: String = "",
+    val details: String = "",
+    val preferredTime: String = "",
+    val status: String = "pending", // "pending", "accepted", "completed"
+    val clientName: String = "زائر يمني",
+    val clientPhone: String = "777644670",
+    val timestamp: Long = System.currentTimeMillis(),
+    val reachesProvider: Boolean = true,
+    val destinationEntity: String = "الفني مباشرة"
 )
 
 @Serializable
@@ -145,7 +161,8 @@ data class PendingProvider(
     val isFemale: Boolean = false,
     val portfolioImages: List<String> = emptyList(),
     val orderPriority: Int = 0,
-    val skills: String = ""
+    val skills: String = "",
+    val nationalIdImageBase64: String = ""
 )
 
 @Serializable
@@ -356,7 +373,28 @@ data class AppSettings(
     val aboutSecurityVisible: Boolean = true,
     val geminiApiKey: String = "",
     val isPortfolioFeatureGloballyEnabled: Boolean = true,
-    val isPortfolioUploadGloballyAllowed: Boolean = true
+    val isPortfolioUploadGloballyAllowed: Boolean = true,
+    val registrationChipColorHex: String = "#3A7CA5",
+    val regChipBgColorsList: List<String> = listOf("#2A9D8F", "#3A7CA5", "#CE1126", "#FFB300", "#50C878", "#9B5DE5", "#F15BB5", "#00F5D4"),
+    val approvedProviderSortingMethod: String = "admin_priority",
+    val searchBarVisible: Boolean = true,
+    val regNameRequired: Boolean = true,
+    val regNameVisible: Boolean = true,
+    val regPhoneRequired: Boolean = true,
+    val regPhoneVisible: Boolean = true,
+    val regCategoryRequired: Boolean = true,
+    val regCategoryVisible: Boolean = true,
+    val regSelfieRequired: Boolean = true,
+    val regSelfieVisible: Boolean = true,
+    val regIdCardRequired: Boolean = true,
+    val regIdCardVisible: Boolean = true,
+    val regAreaRequired: Boolean = true,
+    val regAreaVisible: Boolean = true,
+    val regDescRequired: Boolean = true,
+    val regDescVisible: Boolean = true,
+    val autocompleteNamesEnabled: Boolean = true,
+    val autocompletePhonesEnabled: Boolean = true,
+    val autocompleteLocationsEnabled: Boolean = true
 )
 
 // --- GEMINI DIRECT REST IMPLEMENTATION SCHEMAS ---
@@ -707,6 +745,31 @@ class MainViewModel : ViewModel() {
                             val portFeatureEnabled = snapshot.getBoolean("isPortfolioFeatureGloballyEnabled") ?: true
                             val portUploadAllowed = snapshot.getBoolean("isPortfolioUploadGloballyAllowed") ?: true
 
+                            val regChipColor = snapshot.getString("registrationChipColorHex") ?: "#3A7CA5"
+                            @Suppress("UNCHECKED_CAST")
+                            val regChipColors = snapshot.get("regChipBgColorsList") as? List<String> ?: listOf("#2A9D8F", "#3A7CA5", "#CE1126", "#FFB300", "#50C878", "#9B5DE5", "#F15BB5", "#00F5D4")
+                            val sortingMethod = snapshot.getString("approvedProviderSortingMethod") ?: "admin_priority"
+                            val searchBarVis = snapshot.getBoolean("searchBarVisible") ?: true
+
+                            val regNameReq = snapshot.getBoolean("regNameRequired") ?: true
+                            val regNameVis = snapshot.getBoolean("regNameVisible") ?: true
+                            val regPhoneReq = snapshot.getBoolean("regPhoneRequired") ?: true
+                            val regPhoneVis = snapshot.getBoolean("regPhoneVisible") ?: true
+                            val regCatReq = snapshot.getBoolean("regCategoryRequired") ?: true
+                            val regCatVis = snapshot.getBoolean("regCategoryVisible") ?: true
+                            val regSelfieReq = snapshot.getBoolean("regSelfieRequired") ?: true
+                            val regSelfieVis = snapshot.getBoolean("regSelfieVisible") ?: true
+                            val regIdCardReq = snapshot.getBoolean("regIdCardRequired") ?: true
+                            val regIdCardVis = snapshot.getBoolean("regIdCardVisible") ?: true
+                            val regAreaReq = snapshot.getBoolean("regAreaRequired") ?: true
+                            val regAreaVis = snapshot.getBoolean("regAreaVisible") ?: true
+                            val regDescReq = snapshot.getBoolean("regDescRequired") ?: true
+                            val regDescVis = snapshot.getBoolean("regDescVisible") ?: true
+
+                            val autoNames = snapshot.getBoolean("autocompleteNamesEnabled") ?: true
+                            val autoPhones = snapshot.getBoolean("autocompletePhonesEnabled") ?: true
+                            val autoLocs = snapshot.getBoolean("autocompleteLocationsEnabled") ?: true
+
                             @Suppress("UNCHECKED_CAST")
                             val blockedKeys = snapshot.get("blockedKeywords") as? List<String> ?: listOf("كلب", "حمار", "سيئ", "نصاب")
 
@@ -779,7 +842,28 @@ class MainViewModel : ViewModel() {
                                 aboutSecurityVisible = abSecVis,
                                 geminiApiKey = gKey,
                                 isPortfolioFeatureGloballyEnabled = portFeatureEnabled,
-                                isPortfolioUploadGloballyAllowed = portUploadAllowed
+                                isPortfolioUploadGloballyAllowed = portUploadAllowed,
+                                registrationChipColorHex = regChipColor,
+                                regChipBgColorsList = regChipColors,
+                                approvedProviderSortingMethod = sortingMethod,
+                                searchBarVisible = searchBarVis,
+                                regNameRequired = regNameReq,
+                                regNameVisible = regNameVis,
+                                regPhoneRequired = regPhoneReq,
+                                regPhoneVisible = regPhoneVis,
+                                regCategoryRequired = regCatReq,
+                                regCategoryVisible = regCatVis,
+                                regSelfieRequired = regSelfieReq,
+                                regSelfieVisible = regSelfieVis,
+                                regIdCardRequired = regIdCardReq,
+                                regIdCardVisible = regIdCardVis,
+                                regAreaRequired = regAreaReq,
+                                regAreaVisible = regAreaVis,
+                                regDescRequired = regDescReq,
+                                regDescVisible = regDescVis,
+                                autocompleteNamesEnabled = autoNames,
+                                autocompletePhonesEnabled = autoPhones,
+                                autocompleteLocationsEnabled = autoLocs
                             )
                         }
                     }
@@ -919,14 +1003,30 @@ class MainViewModel : ViewModel() {
             deviceId = pp.deviceId,
             imageUrl = pp.selfieImageBase64,
             portfolioImages = pp.portfolioImages,
-            orderPriority = pp.orderPriority
+            orderPriority = pp.orderPriority,
+            nationalIdImageBase64 = pp.nationalIdImageBase64
         )
         _providers.value = _providers.value + newP
         _pendingRequests.value = _pendingRequests.value.filter { it.id != pp.id }
         addAuditLog(admin, "الموافقة على تفعيل مقدم الخدمة: ${pp.name}")
 
+        // Add Instant Notification for Acceptance
+        val categoryObj = _categories.value.find { it.id == pp.category }
+        val categoryLabelAr = categoryObj?.nameAr ?: pp.category
+        val notif = UserNotification(
+            id = UUID.randomUUID().toString(),
+            title = "🎉 تم قبول واعتماد كادر مهني جديد",
+            body = "نود إعلامكم أنه قد تم قبول واعتماد طلب الكادر المتميز: (${pp.name}) في تخصص: (${categoryLabelAr}) بنجاح. حسابه الآن معتمد بالكامل في رادار الدليل.",
+            time = "الآن",
+            timestamp = System.currentTimeMillis(),
+            isRead = false,
+            statusType = "success"
+        )
+        _notifications.value = listOf(notif) + _notifications.value
+
         // Sync Firestore
         try {
+            firestore?.collection("notifications")?.document(notif.id)?.set(notif)
             firestore?.collection("providers")?.document(newP.id)?.set(newP)
             val rel = ProviderCategoryRelation(
                 id = "${newP.id}_${newP.category}",
@@ -939,9 +1039,25 @@ class MainViewModel : ViewModel() {
     }
 
     fun rejectProviderRequest(id: String, reason: String, admin: String) {
+        val pp = _pendingRequests.value.find { it.id == id }
+        val name = pp?.name ?: "مقدم طلب"
         _pendingRequests.value = _pendingRequests.value.filter { it.id != id }
         addAuditLog(admin, "رفض الطلب المقدم برقم $id لسبب $reason")
+
+        // Add Instant Notification for Rejection
+        val notif = UserNotification(
+            id = UUID.randomUUID().toString(),
+            title = "⚠️ رفض طلب أحد مزودي الخدمات",
+            body = "تنبيه: تم رفض طلب انضمام العضو المسمى: ($name) لسبب عدم استيفاء كامل الوثائق أو الصور المطلوبة. بإمكان العضو المحاولة مجدداً.",
+            time = "الآن",
+            timestamp = System.currentTimeMillis(),
+            isRead = false,
+            statusType = "error"
+        )
+        _notifications.value = listOf(notif) + _notifications.value
+
         try {
+            firestore?.collection("notifications")?.document(notif.id)?.set(notif)
             firestore?.collection("pending_requests")?.document(id)?.delete()
         } catch (e: Exception) {}
     }
@@ -4496,8 +4612,11 @@ fun JoinApplicationScreen(vm: MainViewModel) {
     var acceptedRulesMap by remember { mutableStateOf<Map<Int, Boolean>>(emptyMap()) }
 
     var selfieBase64 by remember { mutableStateOf("") }
+    var nationalIdImageBase64 by remember { mutableStateOf("") }
     var isFemaleGender by remember { mutableStateOf(false) }
     var portfolioBase64List by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    var showSuccessDialog by remember { mutableStateOf(false) }
 
     val categories by vm.categoriesState.collectAsStateWithLifecycle()
     val cities by vm.citiesState.collectAsStateWithLifecycle()
@@ -4522,6 +4641,26 @@ fun JoinApplicationScreen(vm: MainViewModel) {
             val compressed = compressBitmapBase64(it, maxWidth = 320, maxHeight = 320, quality = 70)
             selfieBase64 = compressed
             Toast.makeText(context, "تم التقاط وضغط صورة السيلفي بنجاح عبر الكاميرا 📷", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val idGalleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            val compressed = compressImageBase64(context, it, maxWidth = 320, maxHeight = 320, quality = 70)
+            nationalIdImageBase64 = compressed
+            Toast.makeText(context, "تم اختيار صورة البطاقة وضغطها بنجاح 🪪", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val idCameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap: Bitmap? ->
+        bitmap?.let {
+            val compressed = compressBitmapBase64(it, maxWidth = 320, maxHeight = 320, quality = 70)
+            nationalIdImageBase64 = compressed
+            Toast.makeText(context, "تم التقاط صورة بطاقة الهوية بنجاح عبر الكاميرا 📷", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -4551,6 +4690,59 @@ fun JoinApplicationScreen(vm: MainViewModel) {
             portfolioBase64List = portfolioBase64List + compressed
             Toast.makeText(context, "تم التقاط نموذج من أعمالك بالنجاح! 📷", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    // Success dialog shown when request is fully uploaded/persisted
+    if (showSuccessDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showSuccessDialog = false
+                vm.navigationTargetTab.value = 0
+            },
+            title = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Success",
+                        tint = AppTheme.lightGreen,
+                        modifier = Modifier.size(54.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "تم تقديم الطلب بنجاح! 🎉",
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = fontFamily
+                    )
+                }
+            },
+            text = {
+                Text(
+                    text = "شكراً لتقديمك! لقد تم رفع وإرسال مستنداتك وطلب انضمامك إلى الدليل بنجاح بالرقم المرجعي الموحد.\n\nجاري الآن فحص ومراجعة صورة هويتك والصورة الشخصية من قبل المشرفين، وسيتم تفعيل حسابك كفني معتمد وتلقي إشعار فور الاعتماد.",
+                    color = Color.LightGray,
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
+                    textAlign = TextAlign.Center,
+                    fontFamily = fontFamily
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showSuccessDialog = false
+                        vm.navigationTargetTab.value = 0
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("موافق ورجوع للرئيسية 🗺️", color = Color.White, fontFamily = fontFamily, fontSize = 11.sp)
+                }
+            },
+            containerColor = AppTheme.surfaceDark,
+            shape = RoundedCornerShape(16.dp)
+        )
     }
 
     Column(
@@ -4620,7 +4812,7 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Surface(
-                                        color = if (isMandatory) AppTheme.primaryRed.copy(alpha = 0.2f) else Color.Gray.copy(alpha = 0.2f),
+                                        color = if (isMandatory) AppTheme.primaryRed.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.2f),
                                         shape = RoundedCornerShape(3.dp)
                                     ) {
                                         Text(
@@ -4637,23 +4829,26 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                     }
                 }
 
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("الاسم الكامل / Professional Name") },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedContainerColor = AppTheme.darkBg,
-                        unfocusedContainerColor = AppTheme.darkBg,
-                        errorContainerColor = AppTheme.darkBg,
-                        focusedBorderColor = AppTheme.accentGold,
-                        unfocusedBorderColor = Color.Gray
-                    ),
-                    textStyle = TextStyle(color = Color.White, fontFamily = fontFamily)
-                )
-                Spacer(modifier = Modifier.height(10.dp))
+                // Dynamic inputs visibility and requirements matching AppSettings!
+                if (settings.regNameVisible) {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("الاسم الكامل / Professional Name" + if (settings.regNameRequired) " (مطلوب)" else "") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedContainerColor = AppTheme.darkBg,
+                            unfocusedContainerColor = AppTheme.darkBg,
+                            errorContainerColor = AppTheme.darkBg,
+                            focusedBorderColor = AppTheme.accentGold,
+                            unfocusedBorderColor = Color.Gray
+                        ),
+                        textStyle = TextStyle(color = Color.White, fontFamily = fontFamily)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
 
                 // GENDER CHOOSER SELECTOR
                 Row(
@@ -4688,88 +4883,97 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                 }
                 Spacer(modifier = Modifier.height(8.dp))
 
-                OutlinedTextField(
-                    value = phone,
-                    onValueChange = { phone = it },
-                    label = { Text("رقم الهاتف اليمني للاتصال") },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedContainerColor = AppTheme.darkBg,
-                        unfocusedContainerColor = AppTheme.darkBg,
-                        errorContainerColor = AppTheme.darkBg,
-                        focusedBorderColor = AppTheme.accentGold,
-                        unfocusedBorderColor = Color.Gray
-                    ),
-                    textStyle = TextStyle(color = Color.White, fontFamily = fontFamily)
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-
-                OutlinedTextField(
-                    value = area,
-                    onValueChange = { area = it },
-                    label = { Text("المنطقة / الشارع بالتفصيل") },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedContainerColor = AppTheme.darkBg,
-                        unfocusedContainerColor = AppTheme.darkBg,
-                        errorContainerColor = AppTheme.darkBg,
-                        focusedBorderColor = AppTheme.accentGold,
-                        unfocusedBorderColor = Color.Gray
-                    ),
-                    textStyle = TextStyle(color = Color.White, fontFamily = fontFamily)
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text("نبذة مختصرة عن مؤهلاتك وخدماتك السريعة") },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedContainerColor = AppTheme.darkBg,
-                        unfocusedContainerColor = AppTheme.darkBg,
-                        errorContainerColor = AppTheme.darkBg,
-                        focusedBorderColor = AppTheme.accentGold,
-                        unfocusedBorderColor = Color.Gray
-                    ),
-                    textStyle = TextStyle(color = Color.White, fontFamily = fontFamily)
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Text("اختر فئة التخصص:", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(6.dp))
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(categories) { cat ->
-                        FilterChip(
-                            selected = selectedCatId == cat.id,
-                            onClick = { selectedCatId = cat.id },
-                            label = {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    CategoryIconOrImage(cat.iconUrl, iconSize = 12)
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(cat.nameAr, fontSize = 10.sp)
-                                }
-                            },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = AppTheme.primaryRed,
-                                selectedLabelColor = Color.White,
-                                containerColor = Color(0xFF0F2225)
-                            )
-                        )
-                    }
+                if (settings.regPhoneVisible) {
+                    OutlinedTextField(
+                        value = phone,
+                        onValueChange = { phone = it },
+                        label = { Text("رقم الهاتف اليمني للاتصال" + if (settings.regPhoneRequired) " (مطلوب)" else "") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedContainerColor = AppTheme.darkBg,
+                            unfocusedContainerColor = AppTheme.darkBg,
+                            errorContainerColor = AppTheme.darkBg,
+                            focusedBorderColor = AppTheme.accentGold,
+                            unfocusedBorderColor = Color.Gray
+                        ),
+                        textStyle = TextStyle(color = Color.White, fontFamily = fontFamily)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                if (settings.regAreaVisible) {
+                    OutlinedTextField(
+                        value = area,
+                        onValueChange = { area = it },
+                        label = { Text("المنطقة / الشارع بالتفصيل" + if (settings.regAreaRequired) " (مطلوب)" else "") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedContainerColor = AppTheme.darkBg,
+                            unfocusedContainerColor = AppTheme.darkBg,
+                            errorContainerColor = AppTheme.darkBg,
+                            focusedBorderColor = AppTheme.accentGold,
+                            unfocusedBorderColor = Color.Gray
+                        ),
+                        textStyle = TextStyle(color = Color.White, fontFamily = fontFamily)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+
+                if (settings.regDescVisible) {
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text("نبذة مختصرة عن مؤهلاتك وخدماتك السريعة" + if (settings.regDescRequired) " (مطلوب)" else "") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedContainerColor = AppTheme.darkBg,
+                            unfocusedContainerColor = AppTheme.darkBg,
+                            errorContainerColor = AppTheme.darkBg,
+                            focusedBorderColor = AppTheme.accentGold,
+                            unfocusedBorderColor = Color.Gray
+                        ),
+                        textStyle = TextStyle(color = Color.White, fontFamily = fontFamily)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
+                if (settings.regCategoryVisible) {
+                    Text("اختر فئة التخصص:", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(categories) { cat ->
+                            val isSelected = selectedCatId == cat.id
+                            val customChipBgHex = settings.registrationChipColorHex.ifBlank { "#3A7CA5" }
+                            val baseChipColor = try { Color(android.graphics.Color.parseColor(customChipBgHex)) } catch (e: Exception) { Color(0xFF3A7CA5) }
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { selectedCatId = cat.id },
+                                label = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        CategoryIconOrImage(cat.iconUrl, iconSize = 12)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(cat.nameAr, fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                    }
+                                },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = AppTheme.primaryRed,
+                                    selectedLabelColor = Color.White,
+                                    containerColor = baseChipColor
+                                )
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
 
                 Text("اختر مدينة النشاط الحالية:", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(6.dp))
@@ -4778,14 +4982,17 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     items(cities) { city ->
+                        val isSelected = selectedCityId == city.id
+                        val customChipBgHex = settings.registrationChipColorHex.ifBlank { "#3A7CA5" }
+                        val baseChipColor = try { Color(android.graphics.Color.parseColor(customChipBgHex)) } catch (e: Exception) { Color(0xFF3A7CA5) }
                         FilterChip(
-                            selected = selectedCityId == city.id,
+                            selected = isSelected,
                             onClick = { selectedCityId = city.id },
-                            label = { Text(city.nameAr, fontSize = 10.sp) },
+                            label = { Text(city.nameAr, fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = AppTheme.accentGold,
                                 selectedLabelColor = Color.Black,
-                                containerColor = Color(0xFF0F2225)
+                                containerColor = baseChipColor
                             )
                         )
                     }
@@ -4794,6 +5001,168 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // --- SINGLE SELFIE / MAIN IMAGE CAPTURE ---
+                if (settings.regSelfieVisible) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF0F2225))
+                            .border(1.dp, Color(0xFF223639), RoundedCornerShape(8.dp))
+                            .padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = (if (isFemaleGender) "🛠️ يرجى رفع صورة ترمز لمهنتك/حرفتك (أو صورة شخصية اختيارية)" else "📷 يرجى التقاط صورتك الشخصية السيلفي مباشرة كشرط أساسي لتوثيق الحساب") + (if (settings.regSelfieRequired) " (إجباري)" else " (اختياري)"),
+                            color = AppTheme.accentGold,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = fontFamily
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = { cameraLauncher.launch(null) },
+                                colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
+                                modifier = Modifier.weight(1.2f).height(38.dp),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Icon(Icons.Default.CameraAlt, contentDescription = "Camera", modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("فتح الكاميرا سيلفي 📷", fontSize = 9.sp, fontFamily = fontFamily)
+                            }
+
+                            Button(
+                                onClick = { galleryLauncher.launch("image/*") },
+                                colors = ButtonDefaults.buttonColors(containerColor = AppTheme.surfaceDark),
+                                modifier = Modifier.weight(1f).height(38.dp).border(1.dp, Color(0xFF223639), RoundedCornerShape(6.dp)),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Icon(Icons.Default.PhotoLibrary, contentDescription = "Gallery", modifier = Modifier.size(14.dp), tint = AppTheme.accentGold)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("اختر من الاستوديو 🖼️", fontSize = 9.sp, color = Color.White, fontFamily = fontFamily)
+                            }
+                        }
+
+                        if (selfieBase64.isNotEmpty()) {
+                            val previewBitmap = rememberBase64Bitmap(selfieBase64)
+                            previewBitmap?.let {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Card(
+                                        modifier = Modifier.size(80.dp),
+                                        shape = RoundedCornerShape(6.dp),
+                                        border = BorderStroke(1.5.dp, AppTheme.accentGold)
+                                    ) {
+                                        Image(
+                                            bitmap = it.asImageBitmap(),
+                                            contentDescription = "Preview Image",
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text("تم تحميل الصورة بنجاح ✅", color = AppTheme.lightGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = fontFamily)
+                                        Text("مع ضغط فوري لتخفيف حجم البيانات سحابياً", color = AppTheme.grayText, fontSize = 8.sp, fontFamily = fontFamily)
+                                        TextButton(onClick = { selfieBase64 = "" }) {
+                                            Text("إزالة الصورة ❌", color = AppTheme.primaryRed, fontSize = 9.sp)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(14.dp))
+                }
+
+                // --- NATIONAL ID CARD PHOTO CAPTURE (NEW FEATURE FOR THIRD REQUEST) ---
+                if (settings.regIdCardVisible) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF0F2225))
+                            .border(1.dp, Color(0xFF223639), RoundedCornerShape(8.dp))
+                            .padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "🪪 صورة بطاقة الهوية الشخصية / جواز السفر للتأكد والاعتماد" + if (settings.regIdCardRequired) " (إجباري للمطابقة)" else " (اختياري)",
+                            color = AppTheme.accentGold,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = fontFamily
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = { idCameraLauncher.launch(null) },
+                                colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
+                                modifier = Modifier.weight(1.2f).height(38.dp),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Icon(Icons.Default.CameraAlt, contentDescription = "ID Cam", modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("التقاط صورة الهوية 📷", fontSize = 9.sp, fontFamily = fontFamily)
+                            }
+
+                            Button(
+                                onClick = { idGalleryLauncher.launch("image/*") },
+                                colors = ButtonDefaults.buttonColors(containerColor = AppTheme.surfaceDark),
+                                modifier = Modifier.weight(1f).height(38.dp).border(1.dp, Color(0xFF223639), RoundedCornerShape(6.dp)),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Icon(Icons.Default.PhotoLibrary, contentDescription = "ID Gal", modifier = Modifier.size(14.dp), tint = AppTheme.accentGold)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("اختر من الاستوديو 🖼️", fontSize = 9.sp, color = Color.White, fontFamily = fontFamily)
+                            }
+                        }
+
+                        if (nationalIdImageBase64.isNotEmpty()) {
+                            val previewIdBitmap = rememberBase64Bitmap(nationalIdImageBase64)
+                            previewIdBitmap?.let {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Card(
+                                        modifier = Modifier.size(80.dp),
+                                        shape = RoundedCornerShape(6.dp),
+                                        border = BorderStroke(1.5.dp, AppTheme.accentGold)
+                                    ) {
+                                        Image(
+                                            bitmap = it.asImageBitmap(),
+                                            contentDescription = "Preview ID Image",
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text("تم تحميل وثيقة الهوية بنجاح ✅", color = AppTheme.lightGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = fontFamily)
+                                        Text("مشفرة ومحمية بالكامل سحابياً للأدمن فقط", color = AppTheme.grayText, fontSize = 8.sp, fontFamily = fontFamily)
+                                        TextButton(onClick = { nationalIdImageBase64 = "" }) {
+                                            Text("إزالة الصورة ❌", color = AppTheme.primaryRed, fontSize = 9.sp)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(14.dp))
+                }
+
+                // --- PORTFOLIO GALLERY IMAGES CAPTURE ---
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -4803,78 +5172,6 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                         .padding(10.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = if (isFemaleGender) "🛠️ يرجى رفع صورة ترمز لمهنتك/حرفتك (أو صورة شخصية اختيارية):" else "📷 يرجى التقاط صورتك الشخصية السيلفي مباشرة كشرط أساسي لتوثيق الحساب:",
-                        color = AppTheme.accentGold,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = fontFamily
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = { cameraLauncher.launch(null) },
-                            colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
-                            modifier = Modifier.weight(1.2f).height(38.dp),
-                            shape = RoundedCornerShape(6.dp)
-                        ) {
-                            Icon(Icons.Default.CameraAlt, contentDescription = "Camera", modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("فتح الكاميرا سيلفي 📷", fontSize = 9.sp, fontFamily = fontFamily)
-                        }
-
-                        Button(
-                            onClick = { galleryLauncher.launch("image/*") },
-                            colors = ButtonDefaults.buttonColors(containerColor = AppTheme.surfaceDark),
-                            modifier = Modifier.weight(1f).height(38.dp).border(1.dp, Color(0xFF223639), RoundedCornerShape(6.dp)),
-                            shape = RoundedCornerShape(6.dp)
-                        ) {
-                            Icon(Icons.Default.PhotoLibrary, contentDescription = "Gallery", modifier = Modifier.size(14.dp), tint = AppTheme.accentGold)
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("اختر من الاستوديو 🖼️", fontSize = 9.sp, color = Color.White, fontFamily = fontFamily)
-                        }
-                    }
-
-                    if (selfieBase64.isNotEmpty()) {
-                        val previewBitmap = rememberBase64Bitmap(selfieBase64)
-                        previewBitmap?.let {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Card(
-                                    modifier = Modifier.size(80.dp),
-                                    shape = RoundedCornerShape(6.dp),
-                                    border = BorderStroke(1.5.dp, AppTheme.accentGold)
-                                ) {
-                                    Image(
-                                        bitmap = it.asImageBitmap(),
-                                        contentDescription = "Preview Image",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column {
-                                    Text("تم تحميل الصورة بنجاح ✅", color = AppTheme.lightGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = fontFamily)
-                                    Text("مع ضغط فوري لتخفيف حجم البيانات سحابياً", color = AppTheme.grayText, fontSize = 8.sp, fontFamily = fontFamily)
-                                    TextButton(onClick = { selfieBase64 = "" }) {
-                                        Text("إزالة الصورة ❌", color = AppTheme.primaryRed, fontSize = 9.sp)
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Divider(color = Color(0xFF223639), thickness = 1.dp)
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    // --- PORTFOLIO GALLERY IMAGES CAPTURE ---
                     Text(
                         text = "🎨 معرض صور من نماذج أعمالك ومشاريعك (${portfolioBase64List.size}/${settings.maxPortfolioImages}):",
                         color = AppTheme.accentGold,
@@ -4962,11 +5259,18 @@ fun JoinApplicationScreen(vm: MainViewModel) {
 
                         if (missingMandatories.isNotEmpty()) {
                             Toast.makeText(context, "الرجاء الموافقة على الشرط الإجباري أولاً: ${missingMandatories.first()}", Toast.LENGTH_LONG).show()
-                        } else if (name.isBlank() || phone.isBlank() || area.isBlank() || description.isBlank()) {
-                            Toast.makeText(context, "الرجاء تعبئة كامل الحقول للمراجعة والدراسة", Toast.LENGTH_SHORT).show()
-                        } else if (selfieBase64.isBlank()) {
-                            val alertMessage = if (isFemaleGender) "الرجاء تحديد/تحميل صورة ترمز لمهنتك وحرفتك لتسهيل التعرف عليها بواسطة عملائك!" else "الرجاء التقاط صورتك السيلفي فورياً أو اختيارها من الذاكرة كشرط إلزامي للتوثيق والاعتماد!"
-                            Toast.makeText(context, alertMessage, Toast.LENGTH_LONG).show()
+                        } else if (settings.regNameVisible && settings.regNameRequired && name.isBlank()) {
+                            Toast.makeText(context, "الرجاء تعبئة الاسم الكامل لمطابقة وثائقك الوطنية!", Toast.LENGTH_SHORT).show()
+                        } else if (settings.regPhoneVisible && settings.regPhoneRequired && phone.isBlank()) {
+                            Toast.makeText(context, "الرجاء إدخال رقم الهاتف للتواصل والاتصال!", Toast.LENGTH_SHORT).show()
+                        } else if (settings.regAreaVisible && settings.regAreaRequired && area.isBlank()) {
+                            Toast.makeText(context, "الرجاء تحديد المنطقة والشارع بدقة لتحديد موقعك!", Toast.LENGTH_SHORT).show()
+                        } else if (settings.regDescVisible && settings.regDescRequired && description.isBlank()) {
+                            Toast.makeText(context, "الرجاء إدخال النبذة التعريفية عن خبراتك!", Toast.LENGTH_SHORT).show()
+                        } else if (settings.regSelfieVisible && settings.regSelfieRequired && selfieBase64.isBlank()) {
+                            Toast.makeText(context, "الرجاء التقاط صورتك السيلفي الشخصية كطلب توثيق معتمد!", Toast.LENGTH_SHORT).show()
+                        } else if (settings.regIdCardVisible && settings.regIdCardRequired && nationalIdImageBase64.isBlank()) {
+                            Toast.makeText(context, "الرجاء تصوير أو رفع صورة بطاقة الهوية لمطابقة حسابك!", Toast.LENGTH_SHORT).show()
                         } else {
                             val newRequest = PendingProvider(
                                 id = UUID.randomUUID().toString(),
@@ -4980,7 +5284,8 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                                 selfieImageBase64 = selfieBase64,
                                 isFemale = isFemaleGender,
                                 portfolioImages = portfolioBase64List,
-                                orderPriority = 0
+                                orderPriority = 0,
+                                nationalIdImageBase64 = nationalIdImageBase64
                             )
                             vm.registerPendingProvider(newRequest)
                             name = ""
@@ -4988,14 +5293,18 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                             area = ""
                             description = ""
                             selfieBase64 = ""
+                            nationalIdImageBase64 = ""
                             portfolioBase64List = emptyList()
-                            Toast.makeText(context, "تم رفع وتخزين طلب تسجيلك بنجاح! جاري معالجة طلبك وقبوله بواسطة الإدارة خلال دقائق.", Toast.LENGTH_LONG).show()
+                            
+                            // Triggers visual dialog confirmation
+                            showSuccessDialog = true
                         }
                     },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed)
+                    modifier = Modifier.fillMaxWidth().height(46.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
+                    shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("رفع مستندات وتأكيد الطلب 📥", color = Color.White, fontFamily = fontFamily)
+                    Text("رفع مستندات وتأكيد الطلب 📥", color = Color.White, fontFamily = fontFamily, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             }
         }
@@ -5495,9 +5804,144 @@ fun PendingRequestsTab(vm: MainViewModel, list: List<PendingProvider>) {
                         Text("📁 تخصص القسم: ${pp.category}", color = AppTheme.grayText, fontSize = 11.sp)
                         Text("📍 عنوان السكن والمنطقة: ${pp.area} (${pp.city})", color = Color.White, fontSize = 11.sp)
                         Text("📝 نبذة ومهارات الكادر: ${pp.description}", color = Color.LightGray, fontSize = 10.sp, maxLines = 2)
-                        
                         Text("👤 الجنس والمعرف السحابي للطلب: ${pp.deviceId}", color = Color.Gray, fontSize = 9.sp)
-                        
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Row displaying both uploaded documents side-by-side with captions
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            // 1. Personal / Selfie Photo Card block
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text("صورة مقدم الطلب 👤", color = AppTheme.accentGold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                val personalBitmap = rememberBase64Bitmap(pp.selfieImageBase64)
+                                if (personalBitmap != null) {
+                                    var showLightbox by remember { mutableStateOf(false) }
+                                    Card(
+                                        modifier = Modifier
+                                            .height(100.dp)
+                                            .fillMaxWidth()
+                                            .clickable { showLightbox = true },
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(1.dp, Color(0xFF223639))
+                                    ) {
+                                        Image(
+                                            bitmap = personalBitmap.asImageBitmap(),
+                                            contentDescription = "Personal Photo",
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    }
+                                    if (showLightbox) {
+                                        androidx.compose.ui.window.Dialog(onDismissRequest = { showLightbox = false }) {
+                                            Card(
+                                                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.7f),
+                                                shape = RoundedCornerShape(12.dp),
+                                                border = BorderStroke(1.dp, AppTheme.accentGold)
+                                            ) {
+                                                Box(modifier = Modifier.fillMaxSize()) {
+                                                    Image(
+                                                        bitmap = personalBitmap.asImageBitmap(),
+                                                        contentDescription = "Enlarged Selfie",
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        contentScale = ContentScale.Fit
+                                                    )
+                                                    IconButton(
+                                                        onClick = { showLightbox = false },
+                                                        modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                                                    ) {
+                                                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .height(100.dp)
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0xFF0F2225)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("لم يتم الرفع ❌", color = Color.Gray, fontSize = 9.sp)
+                                    }
+                                }
+                            }
+
+                            // 2. National ID Card Photo block
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text("صورة الهوية الوطنية 🪪", color = AppTheme.accentGold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                val idBitmap = rememberBase64Bitmap(pp.nationalIdImageBase64)
+                                if (idBitmap != null) {
+                                    var showLightbox by remember { mutableStateOf(false) }
+                                    Card(
+                                        modifier = Modifier
+                                            .height(100.dp)
+                                            .fillMaxWidth()
+                                            .clickable { showLightbox = true },
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(1.dp, Color(0xFF223639))
+                                    ) {
+                                        Image(
+                                            bitmap = idBitmap.asImageBitmap(),
+                                            contentDescription = "ID Card Photo",
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    }
+                                    if (showLightbox) {
+                                        androidx.compose.ui.window.Dialog(onDismissRequest = { showLightbox = false }) {
+                                            Card(
+                                                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.7f),
+                                                shape = RoundedCornerShape(12.dp),
+                                                border = BorderStroke(1.dp, AppTheme.accentGold)
+                                            ) {
+                                                Box(modifier = Modifier.fillMaxSize()) {
+                                                    Image(
+                                                        bitmap = idBitmap.asImageBitmap(),
+                                                        contentDescription = "Enlarged ID Card",
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        contentScale = ContentScale.Fit
+                                                    )
+                                                    IconButton(
+                                                        onClick = { showLightbox = false },
+                                                        modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                                                    ) {
+                                                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .height(100.dp)
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0xFF0F2225)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("لم يتم الرفع ❌", color = Color.Gray, fontSize = 9.sp)
+                                    }
+                                }
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(10.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             Button(
@@ -7329,6 +7773,23 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
     var newPresetName by remember { mutableStateOf("") }
     var isNewRuleMandatory by remember { mutableStateOf(true) }
 
+    var regNameVisibleVal by remember { mutableStateOf(settings.regNameVisible) }
+    var regNameRequiredVal by remember { mutableStateOf(settings.regNameRequired) }
+    var regPhoneVisibleVal by remember { mutableStateOf(settings.regPhoneVisible) }
+    var regPhoneRequiredVal by remember { mutableStateOf(settings.regPhoneRequired) }
+    var regAreaVisibleVal by remember { mutableStateOf(settings.regAreaVisible) }
+    var regAreaRequiredVal by remember { mutableStateOf(settings.regAreaRequired) }
+    var regDescVisibleVal by remember { mutableStateOf(settings.regDescVisible) }
+    var regDescRequiredVal by remember { mutableStateOf(settings.regDescRequired) }
+    var regCategoryVisibleVal by remember { mutableStateOf(settings.regCategoryVisible) }
+    var regCategoryRequiredVal by remember { mutableStateOf(settings.regCategoryRequired) }
+    var regSelfieVisibleVal by remember { mutableStateOf(settings.regSelfieVisible) }
+    var regSelfieRequiredVal by remember { mutableStateOf(settings.regSelfieRequired) }
+    var regIdCardVisibleVal by remember { mutableStateOf(settings.regIdCardVisible) }
+    var regIdCardRequiredVal by remember { mutableStateOf(settings.regIdCardRequired) }
+    var registrationChipColorHexVal by remember { mutableStateOf(settings.registrationChipColorHex) }
+    val fontStyle = resolveAppFontFamily(selectedFontField)
+
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         
         Card(colors = CardDefaults.cardColors(containerColor = AppTheme.surfaceDark)) {
@@ -7730,7 +8191,7 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
                 )
 
                 Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    val fontStyle = resolveAppFontFamily(settings.selectedFontName)
+
                     OutlinedTextField(
                         value = aboutImageUrlVal,
                         onValueChange = { aboutImageUrlVal = it },
@@ -8022,6 +8483,108 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
             }
         }
 
+        Card(colors = CardDefaults.cardColors(containerColor = AppTheme.surfaceDark)) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("📋 إدارة حقول ومتطلبات قائمة تسجيل مقدمي الخدمات:", color = AppTheme.accentGold, fontWeight = FontWeight.Bold, fontSize = 11.sp, fontFamily = fontStyle)
+                
+                // Color configuration of registration options
+                OutlinedTextField(
+                    value = registrationChipColorHexVal,
+                    onValueChange = { registrationChipColorHexVal = it },
+                    label = { Text("رمز لون خيارات القائمة وفئات التسجيل (Hex)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                )
+                Text("مثال لخيارات واضحة: #1E3A47 (أزرق داكن مريح وملائم للخط الأبيض الساطع)", color = Color.Gray, fontSize = 9.sp, fontFamily = fontStyle)
+
+                Divider(color = Color(0xFF223639))
+
+                // 1. Name Field
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("حقل الاسم الكامل:", color = Color.White, fontSize = 11.sp, fontFamily = fontStyle)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = regNameVisibleVal, onCheckedChange = { regNameVisibleVal = it })
+                        Text("مرئي", color = Color.LightGray, fontSize = 10.sp, fontFamily = fontStyle)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Checkbox(checked = regNameRequiredVal, onCheckedChange = { regNameRequiredVal = it })
+                        Text("مطلوب", color = Color.LightGray, fontSize = 10.sp, fontFamily = fontStyle)
+                    }
+                }
+
+                // 2. Phone Field
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("حقل رقم الهاتف اليمني:", color = Color.White, fontSize = 11.sp, fontFamily = fontStyle)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = regPhoneVisibleVal, onCheckedChange = { regPhoneVisibleVal = it })
+                        Text("مرئي", color = Color.LightGray, fontSize = 10.sp, fontFamily = fontStyle)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Checkbox(checked = regPhoneRequiredVal, onCheckedChange = { regPhoneRequiredVal = it })
+                        Text("مطلوب", color = Color.LightGray, fontSize = 10.sp, fontFamily = fontStyle)
+                    }
+                }
+
+                // 3. Area Field
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("حقل المنطقة والشارع:", color = Color.White, fontSize = 11.sp, fontFamily = fontStyle)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = regAreaVisibleVal, onCheckedChange = { regAreaVisibleVal = it })
+                        Text("مرئي", color = Color.LightGray, fontSize = 10.sp, fontFamily = fontStyle)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Checkbox(checked = regAreaRequiredVal, onCheckedChange = { regAreaRequiredVal = it })
+                        Text("مطلوب", color = Color.LightGray, fontSize = 10.sp, fontFamily = fontStyle)
+                    }
+                }
+
+                // 4. Description Field
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("حقل نبذة مختصرة عن مؤهلاتك:", color = Color.White, fontSize = 11.sp, fontFamily = fontStyle)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = regDescVisibleVal, onCheckedChange = { regDescVisibleVal = it })
+                        Text("مرئي", color = Color.LightGray, fontSize = 10.sp, fontFamily = fontStyle)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Checkbox(checked = regDescRequiredVal, onCheckedChange = { regDescRequiredVal = it })
+                        Text("مطلوب", color = Color.LightGray, fontSize = 10.sp, fontFamily = fontStyle)
+                    }
+                }
+
+                // 5. Category selection
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("اختيار فئة التخصص:", color = Color.White, fontSize = 11.sp, fontFamily = fontStyle)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = regCategoryVisibleVal, onCheckedChange = { regCategoryVisibleVal = it })
+                        Text("مرئي", color = Color.LightGray, fontSize = 10.sp, fontFamily = fontStyle)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Checkbox(checked = regCategoryRequiredVal, onCheckedChange = { regCategoryRequiredVal = it })
+                        Text("مطلوب", color = Color.LightGray, fontSize = 10.sp, fontFamily = fontStyle)
+                    }
+                }
+
+                // 6. Selfie Capture
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("التقاط الصورة السيلفي الحية:", color = Color.White, fontSize = 11.sp, fontFamily = fontStyle)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = regSelfieVisibleVal, onCheckedChange = { regSelfieVisibleVal = it })
+                        Text("مرئي", color = Color.LightGray, fontSize = 10.sp, fontFamily = fontStyle)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Checkbox(checked = regSelfieRequiredVal, onCheckedChange = { regSelfieRequiredVal = it })
+                        Text("مطلوب", color = Color.LightGray, fontSize = 10.sp, fontFamily = fontStyle)
+                    }
+                }
+
+                // 7. National ID capture (Required by user!)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("رفع وثيقة بطاقة الهوية الوطنية:", color = Color.White, fontSize = 11.sp, fontFamily = fontStyle)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = regIdCardVisibleVal, onCheckedChange = { regIdCardVisibleVal = it })
+                        Text("مرئي", color = Color.LightGray, fontSize = 10.sp, fontFamily = fontStyle)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Checkbox(checked = regIdCardRequiredVal, onCheckedChange = { regIdCardRequiredVal = it })
+                        Text("مطلوب", color = Color.LightGray, fontSize = 10.sp, fontFamily = fontStyle)
+                    }
+                }
+            }
+        }
+
         Button(
             onClick = {
                 val upPrimary = primaryColorField.ifBlank { "#CE1126" }
@@ -8079,7 +8642,22 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
                     aboutVersionVisible = aboutVersionVisibleVal,
                     aboutSecurityLabel = aboutSecurityLabelVal,
                     aboutSecurityValue = aboutSecurityValueVal,
-                    aboutSecurityVisible = aboutSecurityVisibleVal
+                    aboutSecurityVisible = aboutSecurityVisibleVal,
+                    regNameVisible = regNameVisibleVal,
+                    regNameRequired = regNameRequiredVal,
+                    regPhoneVisible = regPhoneVisibleVal,
+                    regPhoneRequired = regPhoneRequiredVal,
+                    regAreaVisible = regAreaVisibleVal,
+                    regAreaRequired = regAreaRequiredVal,
+                    regDescVisible = regDescVisibleVal,
+                    regDescRequired = regDescRequiredVal,
+                    regCategoryVisible = regCategoryVisibleVal,
+                    regCategoryRequired = regCategoryRequiredVal,
+                    regSelfieVisible = regSelfieVisibleVal,
+                    regSelfieRequired = regSelfieRequiredVal,
+                    regIdCardVisible = regIdCardVisibleVal,
+                    regIdCardRequired = regIdCardRequiredVal,
+                    registrationChipColorHex = registrationChipColorHexVal
                 )
                 
                 vm.updateAppSettings(updatedSettingsObj, "الأدمن")
