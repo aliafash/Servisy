@@ -375,6 +375,7 @@ data class AppSettings(
     val isPortfolioFeatureGloballyEnabled: Boolean = true,
     val isPortfolioUploadGloballyAllowed: Boolean = true,
     val registrationChipColorHex: String = "#3A7CA5",
+    val searchRatingWeight: Float = 1.0f,
     val regChipBgColorsList: List<String> = listOf("#2A9D8F", "#3A7CA5", "#CE1126", "#FFB300", "#50C878", "#9B5DE5", "#F15BB5", "#00F5D4"),
     val approvedProviderSortingMethod: String = "admin_priority",
     val searchBarVisible: Boolean = true,
@@ -746,6 +747,7 @@ class MainViewModel : ViewModel() {
                             val portUploadAllowed = snapshot.getBoolean("isPortfolioUploadGloballyAllowed") ?: true
 
                             val regChipColor = snapshot.getString("registrationChipColorHex") ?: "#3A7CA5"
+                            val searchWeightVal = (snapshot.getDouble("searchRatingWeight") ?: 1.0).toFloat()
                             @Suppress("UNCHECKED_CAST")
                             val regChipColors = snapshot.get("regChipBgColorsList") as? List<String> ?: listOf("#2A9D8F", "#3A7CA5", "#CE1126", "#FFB300", "#50C878", "#9B5DE5", "#F15BB5", "#00F5D4")
                             val sortingMethod = snapshot.getString("approvedProviderSortingMethod") ?: "admin_priority"
@@ -844,6 +846,7 @@ class MainViewModel : ViewModel() {
                                 isPortfolioFeatureGloballyEnabled = portFeatureEnabled,
                                 isPortfolioUploadGloballyAllowed = portUploadAllowed,
                                 registrationChipColorHex = regChipColor,
+                                searchRatingWeight = searchWeightVal,
                                 regChipBgColorsList = regChipColors,
                                 approvedProviderSortingMethod = sortingMethod,
                                 searchBarVisible = searchBarVis,
@@ -2697,6 +2700,44 @@ fun ProfessionalCategoryFilterComponent(
             }
         }
 
+        // Smart search autocomplete dropdown suggestions list
+        val autocompleteSuggestions = remember(searchTxt, providers, categories, cities) {
+            if (searchTxt.length >= 2 && settings.searchMatchingMethodHex != "disabled") {
+                val query = searchTxt.trim().lowercase()
+                val list = mutableListOf<String>()
+                
+                // 1. Suggest by Name
+                if (settings.autocompleteNamesEnabled) {
+                    providers.filter { it.isVerified && it.name.contains(query, ignoreCase = true) }
+                        .map { it.name }.distinct().take(3).forEach { list.add(it) }
+                }
+                
+                // 2. Suggest by phone / number
+                if (settings.autocompletePhonesEnabled) {
+                    providers.filter { it.isVerified && it.phone.contains(query) }
+                        .map { it.phone }.distinct().take(2).forEach { list.add(it) }
+                }
+                
+                // 3. Suggest by location
+                if (settings.autocompleteLocationsEnabled) {
+                    providers.filter { it.isVerified && it.area.contains(query, ignoreCase = true) }
+                        .map { it.area }.distinct().take(2).forEach { list.add(it) }
+                }
+                
+                // 4. Suggest by category name
+                categories.filter { it.nameAr.contains(query, ignoreCase = true) }
+                    .map { it.nameAr }.distinct().take(2).forEach { list.add(it) }
+                
+                // 5. Suggest by city name
+                cities.filter { it.nameAr.contains(query, ignoreCase = true) }
+                    .map { it.nameAr }.distinct().take(1).forEach { list.add(it) }
+                
+                list.distinct().take(6)
+            } else {
+                emptyList()
+            }
+        }
+
         // Search inputs & Voice speech trigger
         Row(
             modifier = Modifier
@@ -2764,9 +2805,59 @@ fun ProfessionalCategoryFilterComponent(
                     Icon(Icons.Default.Mic, contentDescription = "Voice Search", tint = AppTheme.accentGold)
                 }
             }
+        }
 
-            // Double Geographic Filter Grid: City dropdown + Dynamic Neighborhood dropdown
-            Row(
+        // Render autocomplete suggestions dropdown if any are computed
+        if (autocompleteSuggestions.isNotEmpty()) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = AppTheme.surfaceDark),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+                    .border(1.dp, AppTheme.accentGold.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Column(modifier = Modifier.padding(6.dp)) {
+                    Text(
+                        text = "💡 مقترحات إكمال البحث الذكي الموثوقة:",
+                        color = AppTheme.accentGold,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = fontFamily,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+                    )
+                    autocompleteSuggestions.forEach { sugg ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { searchTxt = sugg }
+                                .padding(horizontal = 8.dp, vertical = 6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "Suggest Icon",
+                                tint = AppTheme.accentGold,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = sugg,
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontFamily = fontFamily
+                            )
+                        }
+                        if (autocompleteSuggestions.last() != sugg) {
+                            Divider(color = Color(0xFF223639), thickness = 0.5.dp)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Double Geographic Filter Grid: City dropdown + Dynamic Neighborhood dropdown
+        Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 10.dp),
@@ -2859,7 +2950,6 @@ fun ProfessionalCategoryFilterComponent(
                     }
                 }
             }
-        }
 
         // List of filtered professionals with highly robust query criteria
         val listFiltered = providers.filter { itPro ->
@@ -2925,9 +3015,65 @@ fun ProfessionalCategoryFilterComponent(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.weight(1f)
             ) {
-                // Pin / Subscribed Highlighting First
-                val sorted = listFiltered.sortedWith(compareByDescending<Provider> { it.isPinned }
-                    .thenByDescending { it.isSubscribed })
+                // Dynamic Sorting based on admin's settings selection
+                val sorted = if (searchTxt.trim().isNotEmpty()) {
+                    // Confidence Level Search prioritisation: 1. Pinned 2. High rating weighted by admin rating weight
+                    listFiltered.sortedWith(
+                        compareByDescending<Provider> { it.isPinned }
+                            .thenByDescending { it.rating * settings.searchRatingWeight }
+                    )
+                } else {
+                    when (settings.approvedProviderSortingMethod) {
+                        "admin_priority" -> {
+                            listFiltered.sortedWith(
+                                compareByDescending<Provider> { it.orderPriority }
+                                    .thenByDescending { it.isPinned }
+                                    .thenByDescending { it.rating }
+                            )
+                        }
+                        "pin_first" -> {
+                            listFiltered.sortedWith(
+                                compareByDescending<Provider> { it.isPinned }
+                                    .thenByDescending { it.orderPriority }
+                                    .thenByDescending { it.rating }
+                            )
+                        }
+                        "rating_desc" -> {
+                            listFiltered.sortedWith(
+                                compareByDescending<Provider> { it.rating }
+                                    .thenByDescending { it.isPinned }
+                                    .thenByDescending { it.isSubscribed }
+                            )
+                        }
+                        "subscribed_first" -> {
+                            listFiltered.sortedWith(
+                                compareByDescending<Provider> { it.isSubscribed }
+                                    .thenByDescending { it.isPinned }
+                                    .thenByDescending { it.rating }
+                            )
+                        }
+                        "recommended_first" -> {
+                            listFiltered.sortedWith(
+                                compareByDescending<Provider> { it.isRecommended }
+                                    .thenByDescending { it.isPinned }
+                                    .thenByDescending { it.rating }
+                            )
+                        }
+                        "confidence_search" -> {
+                            listFiltered.sortedWith(
+                                compareByDescending<Provider> { it.isPinned }
+                                    .thenByDescending { it.rating * settings.searchRatingWeight }
+                            )
+                        }
+                        else -> {
+                            listFiltered.sortedWith(
+                                compareByDescending<Provider> { it.isPinned }
+                                    .thenByDescending { it.isSubscribed }
+                                    .thenByDescending { it.rating }
+                            )
+                        }
+                    }
+                }
 
                 items(sorted) { item ->
                     ProfessionalCardRow(
@@ -3014,164 +3160,202 @@ fun ProfessionalCardRow(
             .fillMaxWidth()
             .clickable { onProfileClick() }
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Profile selfie image box next to info
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFF0F2225))
+                    .border(
+                        1.5.dp,
+                        if (provider.isSubscribed) Color.Green else AppTheme.accentGold,
+                        RoundedCornerShape(8.dp)
+                    ),
+                contentAlignment = Alignment.Center
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .background(if (provider.isSubscribed) Color.Green else Color.Gray)
+                val profileBitmap = rememberBase64Bitmap(provider.imageUrl)
+                if (profileBitmap != null) {
+                    Image(
+                        bitmap = profileBitmap.asImageBitmap(),
+                        contentDescription = "Avatar",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = provider.name,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        fontFamily = fontFamily
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = "No Avatar",
+                        tint = Color.Gray,
+                        modifier = Modifier.size(36.dp)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "👤 الملف والمعرض ◀",
-                        color = AppTheme.accentGold,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = fontFamily
-                    )
-                }
-                if (provider.isPinned) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(AppTheme.accentGold)
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text("متميز / Pinned", color = Color.Black, fontSize = 8.sp, fontWeight = FontWeight.Bold, fontFamily = fontFamily)
-                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(provider.description, color = AppTheme.grayText, fontSize = 12.sp, lineHeight = 16.sp, fontFamily = fontFamily)
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("📍 ${provider.city} • ${provider.area}", color = AppTheme.grayText, fontSize = 11.sp, fontFamily = fontFamily)
+            Column(modifier = Modifier.weight(1f)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { onViewReviewsClick() }
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(Icons.Default.Star, contentDescription = "Rating", tint = AppTheme.accentGold, modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "${provider.rating} (${reviews.size} تقييمات)",
-                        color = AppTheme.accentGold,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = fontFamily
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-            
-            // Interaction Row 1: Direct Contact
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Button(
-                    onClick = {
-                        val uri = Uri.parse("tel:${provider.phone}")
-                        val it = Intent(Intent.ACTION_DIAL, uri)
-                        context.startActivity(it)
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
-                    modifier = Modifier.weight(1f).height(36.dp),
-                    shape = RoundedCornerShape(6.dp)
-                ) {
-                    Icon(Icons.Default.Phone, contentDescription = "Call", modifier = Modifier.size(12.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("اتصال مباشر", fontSize = 10.sp, fontFamily = fontFamily)
-                }
-
-                Button(
-                    onClick = {
-                        val currentSettings = vm.settings.value
-                        if (!currentSettings.isChatEnabled) {
-                            Toast.makeText(context, "🚫 ${currentSettings.chatDisabledMessage}", Toast.LENGTH_LONG).show()
-                        } else {
-                            vm.startChatWithProvider("user_visitor", provider.id, provider.name)
-                            vm.navigationTargetTab.value = 2
-                            Toast.makeText(context, "تم فتح نافذة الاتصال الآمن مع غرف ${provider.name}", Toast.LENGTH_SHORT).show()
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(CircleShape)
+                                .background(if (provider.isSubscribed) Color.Green else Color.Gray)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = provider.name,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            fontFamily = fontFamily
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "👤 الملف المعرض ◀",
+                            color = AppTheme.accentGold,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = fontFamily
+                        )
+                    }
+                    if (provider.isPinned) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(AppTheme.accentGold)
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text("متميز / Pinned", color = Color.Black, fontSize = 8.sp, fontWeight = FontWeight.Bold, fontFamily = fontFamily)
                         }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F2225)),
-                    modifier = Modifier.weight(1.2f).height(36.dp)
-                        .border(1.dp, AppTheme.accentGold, RoundedCornerShape(6.dp)),
-                    shape = RoundedCornerShape(6.dp)
-                ) {
-                    Icon(Icons.Default.Message, contentDescription = "Chat", modifier = Modifier.size(12.dp), tint = AppTheme.accentGold)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("مراسلة فورية", fontSize = 10.sp, color = AppTheme.accentGold, fontFamily = fontFamily)
+                    }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(provider.description, color = AppTheme.grayText, fontSize = 12.sp, lineHeight = 16.sp, fontFamily = fontFamily)
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("📍 ${provider.city} • ${provider.area}", color = AppTheme.grayText, fontSize = 11.sp, fontFamily = fontFamily)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { onViewReviewsClick() }
+                    ) {
+                        Icon(Icons.Default.Star, contentDescription = "Rating", tint = AppTheme.accentGold, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "${provider.rating} (${reviews.size} تقييمات)",
+                            color = AppTheme.accentGold,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = fontFamily
+                        )
+                    }
+                }
 
-            // Interaction Row 2: Ratings & Reviews
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
+                Spacer(modifier = Modifier.height(10.dp))
+                
+                // Interaction Row 1: Direct Contact
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            val uri = Uri.parse("tel:${provider.phone}")
+                            val it = Intent(Intent.ACTION_DIAL, uri)
+                            context.startActivity(it)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
+                        modifier = Modifier.weight(1f).height(36.dp),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Icon(Icons.Default.Phone, contentDescription = "Call", modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("اتصال مباشر", fontSize = 10.sp, fontFamily = fontFamily)
+                    }
+
+                    Button(
+                        onClick = {
+                            val currentSettings = vm.settings.value
+                            if (!currentSettings.isChatEnabled) {
+                                Toast.makeText(context, "🚫 ${currentSettings.chatDisabledMessage}", Toast.LENGTH_LONG).show()
+                            } else {
+                                vm.startChatWithProvider("user_visitor", provider.id, provider.name)
+                                vm.navigationTargetTab.value = 2
+                                Toast.makeText(context, "تم فتح نافذة الاتصال الآمن مع غرف ${provider.name}", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F2225)),
+                        modifier = Modifier.weight(1.2f).height(36.dp)
+                            .border(1.dp, AppTheme.accentGold, RoundedCornerShape(6.dp)),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Icon(Icons.Default.Message, contentDescription = "Chat", modifier = Modifier.size(12.dp), tint = AppTheme.accentGold)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("مراسلة فورية", fontSize = 10.sp, color = AppTheme.accentGold, fontFamily = fontFamily)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Interaction Row 2: Ratings & Reviews
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Button(
+                        onClick = onRateClick,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF223639)),
+                        modifier = Modifier.weight(1.5f).height(34.dp)
+                            .border(1.dp, Color(0xFF334C50), RoundedCornerShape(6.dp)),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Icon(Icons.Default.Star, contentDescription = "Rate", modifier = Modifier.size(12.dp), tint = AppTheme.accentGold)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("أضف تعليق وتقييم", fontSize = 9.sp, color = Color.White, fontFamily = fontFamily)
+                    }
+
+                    Button(
+                        onClick = onViewReviewsClick,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF132326)),
+                        modifier = Modifier.weight(1.5f).height(34.dp)
+                            .border(1.dp, Color(0xFF223639), RoundedCornerShape(6.dp)),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Icon(Icons.Default.Comment, contentDescription = "Reviews", modifier = Modifier.size(12.dp), tint = Color.White)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("آراء وتجارب العملاء", fontSize = 9.sp, color = Color.White, fontFamily = fontFamily)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Dedicated Instant Booking Button
                 Button(
-                    onClick = onRateClick,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF223639)),
-                    modifier = Modifier.weight(1.5f).height(34.dp)
-                        .border(1.dp, Color(0xFF334C50), RoundedCornerShape(6.dp)),
+                    onClick = onBookClick,
+                    colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(34.dp),
                     shape = RoundedCornerShape(6.dp)
                 ) {
-                    Icon(Icons.Default.Star, contentDescription = "Rate", modifier = Modifier.size(12.dp), tint = AppTheme.accentGold)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("أضف تعليق وتقييم", fontSize = 9.sp, color = Color.White, fontFamily = fontFamily)
+                    Icon(Icons.Default.EventNote, contentDescription = "Book Appointment", modifier = Modifier.size(12.dp), tint = Color.White)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("🗓️ حجز موعد خدمة فوري ومباشر", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White, fontFamily = fontFamily)
                 }
-
-                Button(
-                    onClick = onViewReviewsClick,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF132326)),
-                    modifier = Modifier.weight(1.5f).height(34.dp)
-                        .border(1.dp, Color(0xFF223639), RoundedCornerShape(6.dp)),
-                    shape = RoundedCornerShape(6.dp)
-                ) {
-                    Icon(Icons.Default.Comment, contentDescription = "Reviews", modifier = Modifier.size(12.dp), tint = Color.White)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("آراء وتجارب العملاء", fontSize = 9.sp, color = Color.White, fontFamily = fontFamily)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Dedicated Instant Booking Button
-            Button(
-                onClick = onBookClick,
-                colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(34.dp),
-                shape = RoundedCornerShape(6.dp)
-            ) {
-                Icon(Icons.Default.EventNote, contentDescription = "Book Appointment", modifier = Modifier.size(12.dp), tint = Color.White)
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("🗓️ حجز موعد خدمة فوري ومباشر", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White, fontFamily = fontFamily)
             }
         }
     }
@@ -3244,13 +3428,23 @@ fun ProfessionalProfileDialog(
                                 .border(1.5.dp, AppTheme.accentGold, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = if (provider.name.isNotBlank()) provider.name.take(1) else "👨",
-                                color = AppTheme.accentGold,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = fontFamily
-                            )
+                            val profileBitmap = rememberBase64Bitmap(provider.imageUrl)
+                            if (profileBitmap != null) {
+                                Image(
+                                    bitmap = profileBitmap.asImageBitmap(),
+                                    contentDescription = "Profile Photo",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Text(
+                                    text = if (provider.name.isNotBlank()) provider.name.take(1) else "👨",
+                                    color = AppTheme.accentGold,
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = fontFamily
+                                )
+                            }
                         }
 
                         Column {
@@ -4623,6 +4817,8 @@ fun JoinApplicationScreen(vm: MainViewModel) {
     val settings by vm.settings.collectAsStateWithLifecycle()
 
     val fontFamily = resolveAppFontFamily(settings.selectedFontName)
+    val customChipBgHex = settings.registrationChipColorHex.ifBlank { "#3A7CA5" }
+    val baseChipColor = try { Color(android.graphics.Color.parseColor(customChipBgHex)) } catch (e: Exception) { Color(0xFF3A7CA5) }
 
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -4776,7 +4972,7 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                     )
                     Card(
                         colors = CardDefaults.cardColors(containerColor = Color(0xFF0F2225)),
-                        border = BorderStroke(1.dp, Color(0xFF223639)),
+                        border = BorderStroke(1.dp, baseChipColor.copy(alpha = 0.5f)),
                         modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp)
                     ) {
                         Column(modifier = Modifier.padding(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -4788,7 +4984,7 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(4.dp))
+                                        .clip(RoundedCornerShape(6.dp))
                                         .clickable {
                                             acceptedRulesMap = acceptedRulesMap.toMutableMap().apply { this[idx] = !isChecked }
                                         }
@@ -4799,10 +4995,14 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                                         onCheckedChange = { chk ->
                                             acceptedRulesMap = acceptedRulesMap.toMutableMap().apply { this[idx] = chk ?: false }
                                         },
-                                        colors = CheckboxDefaults.colors(checkedColor = AppTheme.primaryRed)
+                                        colors = CheckboxDefaults.colors(
+                                            checkedColor = baseChipColor,
+                                            uncheckedColor = Color.Gray,
+                                            checkmarkColor = Color.White
+                                        )
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("${idx + 1}. ", color = AppTheme.primaryRed, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Text("${idx + 1}. ", color = baseChipColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     Text(
                                         text = cleanText,
                                         color = Color.White,
@@ -4864,11 +5064,15 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                         RadioButton(
                             selected = !isFemaleGender, 
                             onClick = { isFemaleGender = false },
-                            colors = RadioButtonDefaults.colors(selectedColor = AppTheme.accentGold)
+                            colors = RadioButtonDefaults.colors(
+                                selectedColor = baseChipColor,
+                                unselectedColor = Color.LightGray
+                            )
                         )
-                        Text("ذكر 👨", color = Color.White, fontSize = 11.sp, fontFamily = fontFamily)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("ذكر 👨", color = Color.White, fontSize = 11.sp, fontFamily = fontFamily, fontWeight = FontWeight.Bold)
                     }
-                    Spacer(modifier = Modifier.width(16.dp))
+                    Spacer(modifier = Modifier.width(20.dp))
                     Row(
                         modifier = Modifier.clickable { isFemaleGender = true },
                         verticalAlignment = Alignment.CenterVertically
@@ -4876,9 +5080,13 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                         RadioButton(
                             selected = isFemaleGender, 
                             onClick = { isFemaleGender = true },
-                            colors = RadioButtonDefaults.colors(selectedColor = AppTheme.accentGold)
+                            colors = RadioButtonDefaults.colors(
+                                selectedColor = baseChipColor,
+                                unselectedColor = Color.LightGray
+                            )
                         )
-                        Text("أنثى 👩", color = Color.White, fontSize = 11.sp, fontFamily = fontFamily)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("أنثى 👩", color = Color.White, fontSize = 11.sp, fontFamily = fontFamily, fontWeight = FontWeight.Bold)
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
@@ -4954,22 +5162,32 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                             val isSelected = selectedCatId == cat.id
                             val customChipBgHex = settings.registrationChipColorHex.ifBlank { "#3A7CA5" }
                             val baseChipColor = try { Color(android.graphics.Color.parseColor(customChipBgHex)) } catch (e: Exception) { Color(0xFF3A7CA5) }
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = { selectedCatId = cat.id },
-                                label = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        CategoryIconOrImage(cat.iconUrl, iconSize = 12)
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(cat.nameAr, fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                                    }
-                                },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = AppTheme.primaryRed,
-                                    selectedLabelColor = Color.White,
-                                    containerColor = baseChipColor
-                                )
-                            )
+                            
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSelected) baseChipColor else baseChipColor.copy(alpha = 0.2f))
+                                    .border(
+                                        width = if (isSelected) 2.dp else 1.dp,
+                                        color = if (isSelected) Color.White else baseChipColor.copy(alpha = 0.6f),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .clickable { selectedCatId = cat.id }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    CategoryIconOrImage(cat.iconUrl, iconSize = 13)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = cat.nameAr,
+                                        fontSize = 11.sp,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = fontFamily
+                                    )
+                                }
+                            }
                         }
                     }
                     Spacer(modifier = Modifier.height(10.dp))
@@ -4985,16 +5203,28 @@ fun JoinApplicationScreen(vm: MainViewModel) {
                         val isSelected = selectedCityId == city.id
                         val customChipBgHex = settings.registrationChipColorHex.ifBlank { "#3A7CA5" }
                         val baseChipColor = try { Color(android.graphics.Color.parseColor(customChipBgHex)) } catch (e: Exception) { Color(0xFF3A7CA5) }
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = { selectedCityId = city.id },
-                            label = { Text(city.nameAr, fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = AppTheme.accentGold,
-                                selectedLabelColor = Color.Black,
-                                containerColor = baseChipColor
+                        
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) baseChipColor else baseChipColor.copy(alpha = 0.2f))
+                                .border(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) Color.White else baseChipColor.copy(alpha = 0.6f),
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                .clickable { selectedCityId = city.id }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = city.nameAr,
+                                fontSize = 11.sp,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = fontFamily
                             )
-                        )
+                        }
                     }
                 }
 
@@ -5987,6 +6217,9 @@ fun ManualAddProviderTab(vm: MainViewModel) {
     var selectCatId by remember { mutableStateOf("") }
     var selectCityId by remember { mutableStateOf("") }
     var isEliteVip by remember { mutableStateOf(false) }
+    var isPinnedVal by remember { mutableStateOf(false) }
+    var isRecommendedVal by remember { mutableStateOf(false) }
+    var orderPriorityVal by remember { mutableStateOf("0") }
 
     LaunchedEffect(selectedProviderForEdit) {
         selectedProviderForEdit?.let { p ->
@@ -5998,6 +6231,9 @@ fun ManualAddProviderTab(vm: MainViewModel) {
             selectCatId = p.category
             selectCityId = p.city
             isEliteVip = p.isSubscribed
+            isPinnedVal = p.isPinned
+            isRecommendedVal = p.isRecommended
+            orderPriorityVal = p.orderPriority.toString()
         }
     }
 
@@ -6126,6 +6362,32 @@ fun ManualAddProviderTab(vm: MainViewModel) {
                     Text("ترقية اشتراك هذا العضو لـ VIP نخبة مباشرة 👑", color = Color.White, fontSize = 11.sp)
                 }
 
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = isPinnedVal, onCheckedChange = { isPinnedVal = it })
+                    Text("تثبيت هذا الفني في مطلع نتائج القسم مباشرة 📌", color = Color.White, fontSize = 11.sp)
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = isRecommendedVal, onCheckedChange = { isRecommendedVal = it })
+                    Text("إظهار شارة (فني موصى به وموثوق) من الإدارة ✅", color = Color.White, fontSize = 11.sp)
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("أولوية الترتيب اليدوي (القيمة الأكبر تظهر أولاً):", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    OutlinedTextField(
+                        value = orderPriorityVal,
+                        onValueChange = { orderPriorityVal = it.filter { char -> char.isDigit() } },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = AppTheme.accentGold,
+                            unfocusedBorderColor = Color(0xFF223639)
+                        ),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
                 Button(
                     onClick = {
                         val finalName = nameInput.ifBlank { "مهني دليل رائد" }
@@ -6142,7 +6404,10 @@ fun ManualAddProviderTab(vm: MainViewModel) {
                                 description = descInput,
                                 category = finalCategory,
                                 city = finalCity,
-                                isSubscribed = isEliteVip
+                                isSubscribed = isEliteVip,
+                                isPinned = isPinnedVal,
+                                isRecommended = isRecommendedVal,
+                                orderPriority = orderPriorityVal.toIntOrNull() ?: 0
                             )
                             vm.updateProviderManual(updated, "الأدمن")
                             Toast.makeText(context, "تمت تعديل بيانات الكادر بنجاح وتعميمها عبر المستمع السحابي!", Toast.LENGTH_SHORT).show()
@@ -6157,7 +6422,10 @@ fun ManualAddProviderTab(vm: MainViewModel) {
                                 area = areaInput,
                                 description = descInput,
                                 isVerified = true,
-                                isSubscribed = isEliteVip
+                                isSubscribed = isEliteVip,
+                                isPinned = isPinnedVal,
+                                isRecommended = isRecommendedVal,
+                                orderPriority = orderPriorityVal.toIntOrNull() ?: 0
                             )
                             vm.addProviderManual(newP, "الأدمن")
                             Toast.makeText(context, "تمت إضافة الكادر الجديد يدوياً ونشره للمستهلك بنجاح!", Toast.LENGTH_SHORT).show()
@@ -6169,6 +6437,9 @@ fun ManualAddProviderTab(vm: MainViewModel) {
                         descInput = ""
                         feeInput = "0"
                         isEliteVip = false
+                        isPinnedVal = false
+                        isRecommendedVal = false
+                        orderPriorityVal = "0"
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
                     modifier = Modifier.fillMaxWidth().height(44.dp)
@@ -7788,6 +8059,9 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
     var regIdCardVisibleVal by remember { mutableStateOf(settings.regIdCardVisible) }
     var regIdCardRequiredVal by remember { mutableStateOf(settings.regIdCardRequired) }
     var registrationChipColorHexVal by remember { mutableStateOf(settings.registrationChipColorHex) }
+    var searchRatingWeightVal by remember { mutableStateOf(settings.searchRatingWeight.toString()) }
+    var approvedProviderSortingMethodVal by remember { mutableStateOf(settings.approvedProviderSortingMethod) }
+    var regChipBgColorsListVal by remember(settings.regChipBgColorsList) { mutableStateOf(settings.regChipBgColorsList) }
     val fontStyle = resolveAppFontFamily(selectedFontField)
 
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -8131,6 +8405,53 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
                         )
                     }
                 }
+
+                Text("طريقة ترتيب وتثبيت وظهور مقدمي الخدمات في تصنيف الأقسام:", color = Color.White, fontSize = 11.sp, fontFamily = fontStyle)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf(
+                        "admin_priority" to "ترتيب الأولوية للأدمن (orderPriority) 🔢",
+                        "pin_first" to "تثبيت المثبتين في المقدمة أولاً 📌",
+                        "rating_desc" to "ترتيب حسب أعلى تقييم تنازلياً ⭐",
+                        "subscribed_first" to "ترتيب المشتركين VIP أولاً 👑",
+                        "recommended_first" to "ترتيب الموثوقين والموصى بهم أولاً 🎖️",
+                        "confidence_search" to "مستويات الثقة بالبحث (تثبيت ومضاعفة وزن التقييم) 🎖️⭐📌"
+                    ).forEach { (method, lbl) ->
+                        val isSel = approvedProviderSortingMethodVal == method
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { approvedProviderSortingMethodVal = method }
+                                .padding(vertical = 2.dp)
+                        ) {
+                            RadioButton(
+                                selected = isSel,
+                                onClick = { approvedProviderSortingMethodVal = method },
+                                colors = RadioButtonDefaults.colors(selectedColor = AppTheme.accentGold)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(lbl, color = if (isSel) AppTheme.accentGold else Color.White, fontSize = 10.sp, fontFamily = fontStyle)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = searchRatingWeightVal,
+                    onValueChange = { input ->
+                        searchRatingWeightVal = input.filter { it.isDigit() || it == '.' }
+                    },
+                    label = { Text("المعامل / وزن التقييم في البحث (Rating Weight)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = AppTheme.accentGold,
+                        unfocusedBorderColor = Color.Gray
+                    ),
+                    textStyle = TextStyle(color = Color.White, fontFamily = fontStyle)
+                )
+                Text("تعديل المعامل (مثال: 1.0 أو 1.5 أو 2.0). عند قيام العميل بالبحث، تظهر النتائج الموثقة ذات التقييم المضروب بالوزن أولاً تلقائياً.", color = Color.Gray, fontSize = 9.sp, fontFamily = fontStyle)
 
                 OutlinedTextField(
                     value = autoCleanupDaysVal,
@@ -8497,6 +8818,82 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
                 )
                 Text("مثال لخيارات واضحة: #1E3A47 (أزرق داكن مريح وملائم للخط الأبيض الساطع)", color = Color.Gray, fontSize = 9.sp, fontFamily = fontStyle)
 
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("السمات والألوان المتاحة لتسجيل مقدمي الخدمات (اضغط للاختيار، أو احذف، أو أضف أدناه):", color = Color.White, fontSize = 10.sp, fontFamily = fontStyle)
+                
+                // Horizontal list of colors for the chips
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                ) {
+                    items(regChipBgColorsListVal) { colorHex ->
+                        val parsedColor = try { Color(android.graphics.Color.parseColor(colorHex)) } catch (e: Exception) { Color.Gray }
+                        val isSelectedColor = registrationChipColorHexVal.equals(colorHex, ignoreCase = true)
+                        
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(parsedColor)
+                                .border(
+                                    width = if (isSelectedColor) 3.dp else 1.dp,
+                                    color = if (isSelectedColor) AppTheme.accentGold else Color.Gray,
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                .clickable { registrationChipColorHexVal = colorHex },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isSelectedColor) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Selected",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            // Delete button
+                            IconButton(
+                                onClick = {
+                                    regChipBgColorsListVal = regChipBgColorsListVal.filter { !it.equals(colorHex, ignoreCase = true) }
+                                },
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .align(Alignment.TopEnd)
+                                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Delete",
+                                    tint = Color.Red,
+                                    modifier = Modifier.size(10.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+                
+                Button(
+                    onClick = {
+                        val cleanedHex = registrationChipColorHexVal.trim()
+                        if (cleanedHex.startsWith("#") && (cleanedHex.length == 7 || cleanedHex.length == 9)) {
+                            if (!regChipBgColorsListVal.any { it.equals(cleanedHex, ignoreCase = true) }) {
+                                regChipBgColorsListVal = regChipBgColorsListVal + cleanedHex
+                                Toast.makeText(context, "تمت إضافة اللون إلى القائمة السريعة بنجاح! 🎨", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "اللون مضاف بالفعل بقائمة الخيارات السريعة!", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            Toast.makeText(context, "يرجى كتابة رمز لون Hex صحيح يبدأ بـ # (مثال: #2A9D8F)", Toast.LENGTH_LONG).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
+                    modifier = Modifier.height(32.dp),
+                    shape = RoundedCornerShape(6.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                ) {
+                    Text("إضافة اللون إلى قائمة الخيارات السريعة 🎨➕", color = Color.White, fontSize = 9.sp, fontFamily = fontStyle)
+                }
+
                 Divider(color = Color(0xFF223639))
 
                 // 1. Name Field
@@ -8657,7 +9054,10 @@ fun ColorsConfigAndConditionsTab(vm: MainViewModel, settings: AppSettings) {
                     regSelfieRequired = regSelfieRequiredVal,
                     regIdCardVisible = regIdCardVisibleVal,
                     regIdCardRequired = regIdCardRequiredVal,
-                    registrationChipColorHex = registrationChipColorHexVal
+                    registrationChipColorHex = registrationChipColorHexVal,
+                    searchRatingWeight = searchRatingWeightVal.toFloatOrNull() ?: 1.0f,
+                    approvedProviderSortingMethod = approvedProviderSortingMethodVal,
+                    regChipBgColorsList = regChipBgColorsListVal
                 )
                 
                 vm.updateAppSettings(updatedSettingsObj, "الأدمن")
