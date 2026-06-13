@@ -1,6 +1,2 @@
-# Proguard rules
--keepattributes Signature
--keepattributes *Annotation*
--dontwarn okhttp3.**
--dontwarn okio.**
--dontwarn javax.annotation.**
+# Add project specific ProGuard rules here.
+# By default, the active-set of rules is defined in project.properties.
