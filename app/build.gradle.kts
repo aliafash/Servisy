@@ -1,7 +1,11 @@
 plugins {
-    id("com.android.application")
-    id("org.jetbrains.kotlin.android")
-    id("org.jetbrains.kotlin.plugin.serialization")
+    id("com.android.application") version "8.2.2"
+    id("org.jetbrains.kotlin.android") version "1.9.22"
+}
+
+repositories {
+    google()
+    mavenCentral()
 }
 
 android {
@@ -10,11 +14,12 @@ android {
 
     defaultConfig {
         applicationId = "com.maw"
-        minSdk = 26
+        minSdk = 24
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
 
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
         }
@@ -38,10 +43,9 @@ android {
     }
     buildFeatures {
         compose = true
-        buildConfig = true
     }
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.13"
+        kotlinCompilerExtensionVersion = "1.5.8"
     }
     packaging {
         resources {
@@ -54,28 +58,39 @@ dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.activity:activity-compose:1.8.2")
-    
-    // Compose
-    implementation(platform("androidx.compose:compose-bom:2023.10.01"))
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-graphics")
-    implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.compose.ui:ui:1.5.4")
+    implementation("androidx.compose.ui:ui-graphics:1.5.4")
+    implementation("androidx.compose.ui:ui-tooling-preview:1.5.4")
+    implementation("androidx.compose.material3:material3:1.1.2")
+    implementation("androidx.compose.material:material-icons-extended:1.5.4")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
     implementation("androidx.navigation:navigation-compose:2.7.6")
 
     // Firebase
-    implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
-    implementation("com.google.firebase:firebase-firestore-ktx")
-    implementation("com.google.firebase:firebase-database-ktx")
+    // implementation(platform("com.google.firebase:firebase-bom:32.7.1"))
+    // implementation("com.google.firebase:firebase-firestore-ktx")
+    // implementation("com.google.firebase:firebase-auth-ktx")
 
-    // Network & Serialization
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
-    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
-    
-    // Image loading
+    // Coil
     implementation("io.coil-kt:coil-compose:2.5.0")
+
+    // Testing
+    testImplementation("junit:junit:4.13.2")
 }
+
+// tasks.register("copyApkToRoot") {
+//     dependsOn("assembleDebug")
+//     doLast {
+//         val buildApk = file("build/outputs/apk/debug/app-debug.apk")
+//         val rootApk = file("${rootDir}/app-debug.apk")
+//         val buildOutputsApk = file("${rootDir}/.build-outputs/app-debug.apk")
+//         if (buildApk.exists()) {
+//             buildApk.copyTo(rootApk, overwrite = true)
+//             buildApk.copyTo(buildOutputsApk, overwrite = true)
+//             println("APK copied successfully to root and .build-outputs!")
+//         } else {
+//             println("Source APK not found at ${buildApk.absolutePath}")
+//         }
+//     }
+// }

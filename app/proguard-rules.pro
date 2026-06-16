@@ -1,2 +1,2 @@
-# Add project specific ProGuard rules here.
-# By default, the active-set of rules is defined in project.properties.
+# Proguard rules for com.maw
+-keep class com.maw.** { *; }

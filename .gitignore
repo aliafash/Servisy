@@ -1,0 +1,11 @@
+# Standard Gitignore for Android Maw app
+.gradle
+build/
+app/build/
+.idea
+*.iml
+local.properties
+.DS_Store
+
+# Ensure app-debug.apk is tracked by NOT adding it here.
+# (We specifically want to track app-debug.apk in the main folder!)
