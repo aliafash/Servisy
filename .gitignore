@@ -7,5 +7,8 @@ app/build/
 local.properties
 .DS_Store
 
-# Ensure app-debug.apk is tracked by NOT adding it here.
-# (We specifically want to track app-debug.apk in the main folder!)
+# Protect environment variables and sensitive local settings
+.env
+
+# Explicitly ensure app-debug.apk is tracked and never ignored
+!app-debug.apk

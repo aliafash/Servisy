@@ -23,6 +23,14 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        val adminUser = System.getenv("ADMIN_USERNAME") ?: "WAM2026"
+        val adminDeletePass = System.getenv("ADMIN_DELETE_PASSWORD") ?: "maher736462"
+        val adminLoginPass = System.getenv("ADMIN_LOGIN_PASSWORD") ?: "maher--736462"
+
+        buildConfigField("String", "ADMIN_USERNAME", "\"$adminUser\"")
+        buildConfigField("String", "ADMIN_DELETE_PASSWORD", "\"$adminDeletePass\"")
+        buildConfigField("String", "ADMIN_LOGIN_PASSWORD", "\"$adminLoginPass\"")
     }
 
     buildTypes {
@@ -43,6 +51,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.8"

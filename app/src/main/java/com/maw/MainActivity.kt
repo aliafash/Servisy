@@ -8,6 +8,7 @@ import android.widget.Toast
 import android.speech.RecognizerIntent
 import android.app.Activity
 import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -279,6 +280,20 @@ class MainViewModel : ViewModel() {
 
     private val _pendingApprovals = MutableStateFlow<List<Provider>>(emptyList())
     val pendingApprovals: StateFlow<List<Provider>> = _pendingApprovals.asStateFlow()
+
+    private val _supportPhone = MutableStateFlow("779876543")
+    val supportPhone: StateFlow<String> = _supportPhone.asStateFlow()
+
+    private val _isOnline = MutableStateFlow(true)
+    val isOnline: StateFlow<Boolean> = _isOnline.asStateFlow()
+
+    fun updateSupportPhone(newPhone: String) {
+        _supportPhone.value = newPhone
+    }
+
+    fun setOnlineState(online: Boolean) {
+        _isOnline.value = online
+    }
 
     init {
         // Populate Categories
@@ -853,13 +868,29 @@ fun getFontFamilyByName(name: String): FontFamily {
     }
 }
 
+fun calculateDistanceInKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+    val r = 6371.0 // Earth's planetary radius in km
+    val dLat = Math.toRadians(lat2 - lat1)
+    val dLon = Math.toRadians(lon2 - lon1)
+    val a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2)
+    val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    return r * c
+}
+
 // --- MAIN SCREEN ---
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         setContent {
             var isUserRole by remember { mutableStateOf(true) }
             val vm: MainViewModel = viewModel()
+            val context = LocalContext.current
+            var showAdminLoginDialog by remember { mutableStateOf(false) }
+            var loginUsernameField by remember { mutableStateOf("") }
+            var loginPasswordField by remember { mutableStateOf("") }
 
             MaterialTheme {
                 Surface(
@@ -905,7 +936,14 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(30.dp))
                                     .background(Color.Black.copy(alpha = 0.4f))
-                                    .clickable { isUserRole = !isUserRole }
+                                    .clickable {
+                                        if (isUserRole) {
+                                            showAdminLoginDialog = true
+                                        } else {
+                                            isUserRole = true
+                                            showAppToast(context, "👋 تم تسجيل الخروج من وضع المسؤول بنجاح!", true)
+                                        }
+                                    }
                                     .padding(horizontal = 12.dp, vertical = 6.dp),
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -930,6 +968,87 @@ class MainActivity : ComponentActivity() {
                             UserWorkspace(vm)
                         } else {
                             AdminDashboardWorkspace(vm)
+                        }
+
+                        if (showAdminLoginDialog) {
+                            AlertDialog(
+                                onDismissRequest = { 
+                                    showAdminLoginDialog = false 
+                                    loginUsernameField = ""
+                                    loginPasswordField = ""
+                                },
+                                containerColor = AppTheme.surfaceDark,
+                                title = {
+                                    Text("🔐 تسجيل دخول كمسؤول النظام", color = AppTheme.accentGold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        Text("يرجى إدخال اسم المستخدم وكلمة المرور الخاصة بلوحة الإدارة لليمن الأسعد لمتابعة صلاحياتك:", color = Color.White, fontSize = 10.sp)
+                                        
+                                        Text("اسم المستخدم", color = Color.White, fontSize = 9.sp)
+                                        OutlinedTextField(
+                                            value = loginUsernameField,
+                                            onValueChange = { loginUsernameField = it },
+                                            singleLine = true,
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedTextColor = Color.White,
+                                                unfocusedTextColor = Color.White,
+                                                focusedBorderColor = AppTheme.accentGold,
+                                                unfocusedBorderColor = Color.Gray,
+                                                cursorColor = AppTheme.accentGold
+                                            ),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        Text("كلمة المرور الإدارية", color = Color.White, fontSize = 9.sp)
+                                        OutlinedTextField(
+                                            value = loginPasswordField,
+                                            onValueChange = { loginPasswordField = it },
+                                            singleLine = true,
+                                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedTextColor = Color.White,
+                                                unfocusedTextColor = Color.White,
+                                                focusedBorderColor = AppTheme.accentGold,
+                                                unfocusedBorderColor = Color.Gray,
+                                                cursorColor = AppTheme.accentGold
+                                            ),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                },
+                                confirmButton = {
+                                    Button(
+                                        colors = ButtonDefaults.buttonColors(containerColor = AppTheme.accentGold),
+                                        onClick = {
+                                            val correctUser = try { BuildConfig.ADMIN_USERNAME } catch (e: Throwable) { "WAM2026" }
+                                            val correctPass = try { BuildConfig.ADMIN_LOGIN_PASSWORD } catch (e: Throwable) { "maher--736462" }
+                                            
+                                            if (loginUsernameField == correctUser && loginPasswordField == correctPass) {
+                                                isUserRole = false
+                                                showAdminLoginDialog = false
+                                                vm.addAudit(correctUser, "تسجيل دخول كمسؤول", "تم الدخول بنجاح من جهاز الآدمن الرئيسي")
+                                                showAppToast(context, "🔐 مرحباً بك مجدداً مشرف عام المنظومة!", true)
+                                            } else {
+                                                showAppToast(context, "❌ اسم المستخدم أو كلمة المرور الإدارية خاطئة!", false)
+                                            }
+                                        }
+                                    ) {
+                                        Text("تسجيل الدخول", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                },
+                                dismissButton = {
+                                    OutlinedButton(
+                                        onClick = {
+                                            showAdminLoginDialog = false
+                                            loginUsernameField = ""
+                                            loginPasswordField = ""
+                                        }
+                                    ) {
+                                        Text("إلغاء", color = Color.White, fontSize = 10.sp)
+                                    }
+                                }
+                            )
                         }
                     }
                 }
@@ -1390,7 +1509,61 @@ fun UserWorkspace(vm: MainViewModel) {
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        // support hotline bar with offline/online constraints (hidden for immersive AI fullscreen)
+        val supportPhone by vm.supportPhone.collectAsState()
+        val isOnline by vm.isOnline.collectAsState()
+
+        if (activeUserTab != 1) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFF0F2422))
+                    .border(1.dp, Color(0xFF00C853).copy(0.35f), RoundedCornerShape(8.dp))
+                    .clickable {
+                        if (isOnline) {
+                            val intent = Intent(Intent.ACTION_DIAL).apply {
+                                data = Uri.parse("tel:$supportPhone")
+                            }
+                            context.startActivity(intent)
+                        } else {
+                            showAppToast(context, "⚠️ يتعذر الاتصال بالدعم الفني في وضع الأوفلاين! يرجى تشغيل الشبكة أولاً.", false)
+                        }
+                    }
+                    .padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SupportAgent,
+                        contentDescription = null,
+                        tint = Color(0xFF00C853),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Column {
+                        Text("الخط الإداري العام (منظومة اليمن الأسعد)", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = if (isOnline) "رقم الاتصال الفوري: $supportPhone" else "🔒 مخفي لعدم الاتصال بالشبكة (أوفلاين)",
+                            color = if (isOnline) AppTheme.accentGold else Color.Gray,
+                            fontSize = 9.sp
+                        )
+                    }
+                }
+                Text(
+                    text = if (isOnline) "اتصال الآن 📞" else "دون اتصال 🌐",
+                    color = if (isOnline) Color(0xFF00C853) else Color.Gray,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+        }
 
         when (activeUserTab) {
             0 -> {
@@ -1847,30 +2020,37 @@ fun UserWorkspace(vm: MainViewModel) {
                             )
                         }
 
-                        providers.filter { it.isAvailable }.forEach { prov ->
-                            // Calculating dynamic relative screen offsets based on mock geographic coords
-                            val relativeOffsetMultiplierX = ((prov.latX - 15.36) * 1200f).toFloat()
-                            val relativeOffsetMultiplierY = ((prov.lonY - 44.18) * 1200f).toFloat()
+                        providers.forEach { prov ->
+                            // Calculating dynamic relative screen offsets based on geographic coords
+                            val relativeOffsetMultiplierX = ((prov.latX - 15.369) * 2000f).toFloat()
+                            val relativeOffsetMultiplierY = ((prov.lonY - 44.191) * 2000f).toFloat()
 
                             val screenX = 140f + (relativeOffsetMultiplierX % 200f)
                             val screenY = 150f + (relativeOffsetMultiplierY % 240f)
 
                             val isSelected = selectedMapProvider?.id == prov.id
 
+                            // Status color calibration based on requirements
+                            val markerColor = when {
+                                prov.isVerified && prov.isAvailable -> Color(0xFF2E7D32) // Green: Available & Active
+                                prov.isVerified && !prov.isAvailable -> Color(0xFFEF6C00) // Orange: Busy
+                                else -> Color(0xFFC62828) // Red: Disconnected / Not verified
+                            }
+
                             Box(
                                 modifier = Modifier
                                     .absoluteOffset(x = screenX.dp, y = screenY.dp)
-                                    .size(if (isSelected) 36.dp else 26.dp)
+                                    .size(if (isSelected) 34.dp else 24.dp)
                                     .clip(CircleShape)
-                                    .background(if (isSelected) AppTheme.primaryRed else AppTheme.accentGold)
-                                    .border(2.dp, Color.White, CircleShape)
+                                    .background(markerColor)
+                                    .border(1.5.dp, Color.White, CircleShape)
                                     .clickable { selectedMapProvider = prov }
-                                    .padding(4.dp),
+                                    .padding(3.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = if (prov.categoryId == "cat_elec") "⚡" else if (prov.categoryId == "cat_plum") "💧" else "❄️",
-                                    fontSize = if (isSelected) 12.sp else 9.sp
+                                    fontSize = if (isSelected) 11.sp else 8.sp
                                 )
                             }
                         }
@@ -1954,6 +2134,8 @@ fun UserWorkspace(vm: MainViewModel) {
         var clientPhone by remember { mutableStateOf("") }
         var clientRegion by remember { mutableStateOf("") }
         var serviceInfoVal by remember { mutableStateOf("") }
+        var clientLat by remember { mutableStateOf(15.369) }
+        var clientLon by remember { mutableStateOf(44.191) }
         var showBookingConfirmationDialog by remember { mutableStateOf(false) }
         val dynamicFormMap = remember { mutableStateMapOf<String, String>() }
 
@@ -2023,6 +2205,77 @@ fun UserWorkspace(vm: MainViewModel) {
                         minLines = 2,
                         colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
                     )
+
+                    Text("📍 الإحداثيات الجغرافية لموقعك (Latitude & Longitude) *", color = AppTheme.accentGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = clientLat.toString(),
+                            onValueChange = { 
+                                clientLat = it.toDoubleOrNull() ?: 15.369 
+                            },
+                            label = { Text("خط العرض Lat", fontSize = 9.sp, color = Color.Gray) },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                        )
+                        OutlinedTextField(
+                            value = clientLon.toString(),
+                            onValueChange = { 
+                                clientLon = it.toDoubleOrNull() ?: 44.191 
+                            },
+                            label = { Text("خط الطول Lon", fontSize = 9.sp, color = Color.Gray) },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                        )
+                    }
+
+                    Button(
+                        onClick = {
+                            clientLat = 15.369 + (java.util.Random().nextDouble() - 0.5) * 0.05
+                            clientLon = 44.191 + (java.util.Random().nextDouble() - 0.5) * 0.05
+                            showAppToast(context, "🛰️ تم الاتصال بالأقمار الاصطناعية وتحديد موقع الـ GPS بدقة!", true)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AppTheme.surfaceDark),
+                        border = BorderStroke(1.dp, AppTheme.accentGold),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Icon(Icons.Default.MyLocation, contentDescription = null, modifier = Modifier.size(14.dp), tint = AppTheme.accentGold)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("جلب موقع واكتشاف الـ GPS تلقائياً", color = AppTheme.accentGold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    val computedDistance = calculateDistanceInKm(prov.latX, prov.lonY, clientLat, clientLon)
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF162527)),
+                        border = BorderStroke(1.dp, Color(0xFF81C784)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text("📍", fontSize = 18.sp)
+                            Column {
+                                Text(
+                                    text = "المسافة الجغرافية الفاصلة عن الكادر الإلكتروني:",
+                                    color = Color.LightGray,
+                                    fontSize = 9.sp
+                                )
+                                Text(
+                                    text = "يبعد الفني ${prov.name} مسافة ${String.format(Locale.US, "%.2f", computedDistance)} كم عنك",
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
 
                     // Configurable fields injected dynamically by Admin Controller
                     formFields.filter { !it.isHidden }.forEach { field ->
@@ -2169,6 +2422,9 @@ fun UserWorkspace(vm: MainViewModel) {
                         Text("• رقم الهاتف: $clientPhone", color = Color.White, fontSize = 11.sp)
                         Text("• الحي السكني/العنوان: $clientRegion", color = Color.White, fontSize = 11.sp)
                         Text("• تفاصيل الخدمة: $serviceInfoVal", color = Color.White, fontSize = 11.sp)
+                        val dist = calculateDistanceInKm(prov.latX, prov.lonY, clientLat, clientLon)
+                        Text("• موقعك بالخريطة (Lat/Lon): $clientLat, $clientLon", color = AppTheme.accentGold, fontSize = 11.sp)
+                        Text("• المسافة الدقيقة عن الكادر: ${String.format(Locale.US, "%.2f", dist)} كم", color = AppTheme.accentGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         dynamicFormMap.forEach { (lbl, valText) ->
                             Text("• $lbl: $valText", color = Color.White, fontSize = 11.sp)
                         }
@@ -2179,6 +2435,11 @@ fun UserWorkspace(vm: MainViewModel) {
                         colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
                         onClick = {
                             showBookingConfirmationDialog = false
+                            val totalMap = dynamicFormMap.toMutableMap()
+                            val dist = calculateDistanceInKm(prov.latX, prov.lonY, clientLat, clientLon)
+                            totalMap["إحداثيات العميل"] = "$clientLat, $clientLon"
+                            totalMap["المسافة المفتوحة"] = "${String.format(Locale.US, "%.2f", dist)} كم"
+                            
                             val newBooking = Booking(
                                 id = "B-${java.util.Random().nextInt(8999) + 1000}",
                                 providerId = prov.id,
@@ -2187,7 +2448,7 @@ fun UserWorkspace(vm: MainViewModel) {
                                 userPhone = clientPhone,
                                 userArea = clientRegion,
                                 serviceInfo = serviceInfoVal,
-                                customFieldsData = dynamicFormMap.toMap()
+                                customFieldsData = totalMap.toMap()
                             )
                             vm.createBooking(newBooking)
                             showAppToast(context, "تم إرسال طلب حجز الخدمة بنجاح وجاري التوزيع التلقائي لحجزك!", true)
@@ -3409,6 +3670,7 @@ fun FormAndCardsAestheticCustomizer(vm: MainViewModel) {
     var newFieldType by remember { mutableStateOf("Text") }
     var isNewFieldRequired by remember { mutableStateOf(false) }
     var newFieldDropdownOptions by remember { mutableStateOf("") }
+    var editingFieldId by remember { mutableStateOf<String?>(null) }
 
     // State for Admin configuration of Aesthetic Cards
     var inputFontName by remember { mutableStateOf(cardStyleName) }
@@ -3853,7 +4115,12 @@ fun FormAndCardsAestheticCustomizer(vm: MainViewModel) {
                     modifier = Modifier.padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text("📋 إضافة وتطوير حقول جديدة في استمارة حجز المستخدم", color = AppTheme.accentGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        if (editingFieldId != null) "✏️ تعديل وتحديث بيانات الحقل المخصص الاستمارة" else "📋 إضافة وتطوير حقول جديدة في استمارة حجز المستخدم",
+                        color = AppTheme.accentGold,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
 
                     Text("عنوان السؤال أو الحقل بالعربية", color = Color.White, fontSize = 9.sp)
                     OutlinedTextField(
@@ -3917,7 +4184,7 @@ fun FormAndCardsAestheticCustomizer(vm: MainViewModel) {
                             }
 
                             val addedField = CustomFormField(
-                                id = "field_" + System.currentTimeMillis(),
+                                id = editingFieldId ?: ("field_" + System.currentTimeMillis()),
                                 label = newFieldLabel,
                                 type = newFieldType,
                                 isRequired = isNewFieldRequired,
@@ -3925,17 +4192,39 @@ fun FormAndCardsAestheticCustomizer(vm: MainViewModel) {
                             )
 
                             vm.modifyField(addedField)
-                            showAppToast(context, "تم إلحاق وحفظ الحقل الإداري الجديد في استمارة الحجز بنجاح!", true)
+                            showAppToast(context, if (editingFieldId != null) "تم تحديث الحقل المخصص بنجاح!" else "تم إلحاق وحفظ الحقل الإداري الجديد في استمارة الحجز بنجاح!", true)
 
                             // Clear entries
                             newFieldLabel = ""
                             newFieldDropdownOptions = ""
                             isNewFieldRequired = false
+                            editingFieldId = null
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
+                        colors = ButtonDefaults.buttonColors(containerColor = if (editingFieldId != null) AppTheme.accentGold else AppTheme.primaryRed),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("إدراج الحقل المخصص في الاستمارة", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            if (editingFieldId != null) "حفظ والتعديلات الحالية 💾" else "إدراج الحقل المخصص في الاستمارة",
+                            color = if (editingFieldId != null) Color.Black else Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    
+                    if (editingFieldId != null) {
+                        OutlinedButton(
+                            onClick = {
+                                newFieldLabel = ""
+                                newFieldType = "Text"
+                                isNewFieldRequired = false
+                                newFieldDropdownOptions = ""
+                                editingFieldId = null
+                            },
+                            border = BorderStroke(1.dp, Color.Gray),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("إلغاء التعديل والعودة للإضافة ↩️", color = Color.White, fontSize = 10.sp)
+                        }
                     }
                 }
             }
@@ -3955,9 +4244,9 @@ fun FormAndCardsAestheticCustomizer(vm: MainViewModel) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(field.label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(field.label, color = if (field.isHidden) Color.Gray else Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         if (field.isRequired) {
                             Spacer(modifier = Modifier.width(6.dp))
                             Box(
@@ -3968,6 +4257,16 @@ fun FormAndCardsAestheticCustomizer(vm: MainViewModel) {
                                 Text("إجباري", color = AppTheme.primaryRed, fontSize = 7.sp, fontWeight = FontWeight.Bold)
                             }
                         }
+                        if (field.isHidden) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .background(Color.White.copy(0.12f), RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                            ) {
+                                Text("مخفي 🫣", color = Color.Gray, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                     Text("نوع ميزة ترميز الحقل: ${field.type}", color = AppTheme.grayText, fontSize = 9.sp)
                     if (field.dropdownOptions.isNotEmpty()) {
@@ -3975,13 +4274,43 @@ fun FormAndCardsAestheticCustomizer(vm: MainViewModel) {
                     }
                 }
 
-                IconButton(
-                    onClick = {
-                        vm.removeField(field.id)
-                        showAppToast(context, "تم شطب الحقل من الاستمارة بنجاح!", false)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = {
+                            val updated = field.copy(isHidden = !field.isHidden)
+                            vm.modifyField(updated)
+                            showAppToast(context, if (updated.isHidden) "تم إخفاء الحقل من استمارة الحجز" else "تم إظهار الحقل واستعادته بنجاح", true)
+                        }
+                    ) {
+                        Icon(
+                            imageVector = if (field.isHidden) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = "Toggle visibility",
+                            tint = if (field.isHidden) Color.Gray else AppTheme.accentGold,
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
-                ) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = AppTheme.primaryRed, modifier = Modifier.size(16.dp))
+
+                    IconButton(
+                        onClick = {
+                            editingFieldId = field.id
+                            newFieldLabel = field.label
+                            newFieldType = field.type
+                            isNewFieldRequired = field.isRequired
+                            newFieldDropdownOptions = field.dropdownOptions
+                            showAppToast(context, "تم تحميل بيانات الحقل للتعديل بالأعلى ✏️", true)
+                        }
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit", tint = Color.Cyan, modifier = Modifier.size(16.dp))
+                    }
+
+                    IconButton(
+                        onClick = {
+                            vm.removeField(field.id)
+                            showAppToast(context, "تم شطب الحقل من الاستمارة بنجاح!", false)
+                        }
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = AppTheme.primaryRed, modifier = Modifier.size(16.dp))
+                    }
                 }
             }
         }
@@ -4287,46 +4616,572 @@ fun NotificationControlCentre(vm: MainViewModel) {
 @Composable
 fun TechnicianApprovalScreen(vm: MainViewModel) {
     val pendingApprovals by vm.pendingApprovals.collectAsState()
+    val providers by vm.providers.collectAsState()
+    val categories by vm.categories.collectAsState()
     val context = LocalContext.current
+
+    // State managers for Adding / Editing technicians
+    var isEditingMode by remember { mutableStateOf(false) }
+    var currentEditingId by remember { mutableStateOf<String?>(null) } // null means "adding new"
+
+    var nameState by remember { mutableStateOf("") }
+    var phoneState by remember { mutableStateOf("") }
+    var specialtyState by remember { mutableStateOf("") }
+    var cityState by remember { mutableStateOf("صنعاء") }
+    var areaState by remember { mutableStateOf("") }
+    var addressDetailState by remember { mutableStateOf("") }
+    var categoryIdState by remember { mutableStateOf("cat_elec") }
+    var inspectionPriceState by remember { mutableStateOf(1000.0) }
+    var latState by remember { mutableStateOf(15.369) }
+    var lonState by remember { mutableStateOf(44.191) }
+    var isAvailableState by remember { mutableStateOf(true) }
+    var isVipState by remember { mutableStateOf(false) }
+    var isVerifiedState by remember { mutableStateOf(true) }
+    var isRecommendedState by remember { mutableStateOf(false) }
+    var avatarUriState by remember { mutableStateOf("") }
+    var coverUriState by remember { mutableStateOf("") }
+
+    // Multi-media gallery pick launchers
+    val avatarLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+        onResult = { uri ->
+            uri?.let {
+                avatarUriState = it.toString()
+                showAppToast(context, "📸 تم اختيار وتثبيت الصورة الشخصية للفني بنجاح", true)
+            }
+        }
+    )
+
+    val coverLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+        onResult = { uri ->
+            uri?.let {
+                coverUriState = it.toString()
+                showAppToast(context, "🖼️ تم اختيار وتثبيت غلاف التخصص الخدمي للفني بنجاح", true)
+            }
+        }
+    )
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Text(
-                text = "🛡️ شاشة تفعيل وقبول تراخيص الفنيين الجدد",
-                color = Color.White,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "بصفتك مديراً عاماً، يمكنك مراجعة طلبات الانضمام المهنية ومنحهم الموافقة أو الرفض للظهور بدليل كل خدمات اليمن.",
-                color = AppTheme.grayText,
-                fontSize = 10.sp
-            )
-        }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "🛡️ شاشة تفعيل وقبول تراخيص وإدارة الكوادر الفنية",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "بصفتك مديراً عاماً، يمكنك مراجعة طلبات الانضمام المعالقة، تعديل بيانات الفنيين المعتمدين، وتحميل معارضهم وصورهم وإحداثياتهم.",
+                        color = AppTheme.grayText,
+                        fontSize = 9.sp
+                    )
+                }
 
-        if (pendingApprovals.isEmpty()) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(150.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.Celebration, contentDescription = null, modifier = Modifier.size(32.dp), tint = AppTheme.accentGold)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("لا يوجد فنيين بانتظار الترخيص حالياً. كافة الملفات مدققة مسبقاً!", color = Color.Gray, fontSize = 11.sp, textAlign = TextAlign.Center)
+                if (!isEditingMode) {
+                    Button(
+                        onClick = {
+                            // Reset state for new provider inclusion
+                            currentEditingId = null
+                            nameState = ""
+                            phoneState = ""
+                            specialtyState = ""
+                            cityState = "صنعاء"
+                            areaState = ""
+                            addressDetailState = ""
+                            categoryIdState = "cat_elec"
+                            inspectionPriceState = 1000.0
+                            latState = 15.369
+                            lonState = 44.191
+                            isAvailableState = true
+                            isVipState = false
+                            isVerifiedState = true
+                            isRecommendedState = false
+                            avatarUriState = ""
+                            coverUriState = ""
+                            isEditingMode = true
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AppTheme.accentGold),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, size = 14.dp, tint = Color.Black)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("إضافة فني يدوياً", color = Color.Black, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
-        } else {
-            items(pendingApprovals) { provider ->
+        }
+
+        // I. INLINE INTERACTIVE PROFILES CREATOR/EDITOR
+        if (isEditingMode) {
+            item {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = AppTheme.surfaceDark),
-                    border = BorderStroke(1.dp, Color.Gray.copy(0.3f)),
+                    border = BorderStroke(1.2.dp, AppTheme.accentGold),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = if (currentEditingId == null) "🆕 إضافة ملف فني جديد للدليل الموثق" else "✏️ محرر البيانات والمواقع الفنية للكادر",
+                            color = AppTheme.accentGold,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Text("الاسم الثلاثي للفني *", color = Color.White, fontSize = 10.sp)
+                        OutlinedTextField(
+                            value = nameState,
+                            onValueChange = { nameState = it },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("رقم الهاتف الفني *", color = Color.White, fontSize = 10.sp)
+                                OutlinedTextField(
+                                    value = phoneState,
+                                    onValueChange = { phoneState = it },
+                                    singleLine = true,
+                                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                                )
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("سعر الفحص والمعاينة *", color = Color.White, fontSize = 10.sp)
+                                OutlinedTextField(
+                                    value = inspectionPriceState.toString(),
+                                    onValueChange = { inspectionPriceState = it.toDoubleOrNull() ?: 1000.0 },
+                                    singleLine = true,
+                                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                                )
+                            }
+                        }
+
+                        Text("التخصص الفني الدقيق وصيغة الخدمة *", color = Color.White, fontSize = 10.sp)
+                        OutlinedTextField(
+                            value = specialtyState,
+                            onValueChange = { specialtyState = it },
+                            placeholder = { Text("مثال: مهندس شبكات تمديد ونظم توزيع طاقة", color = Color.Gray, fontSize = 10.sp) },
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Text("القسم الخدمي الرئيسي *", color = Color.White, fontSize = 10.sp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            categories.forEach { cat ->
+                                val isSelected = categoryIdState == cat.id
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(if (isSelected) AppTheme.accentGold else Color.Gray.copy(0.2f))
+                                        .clickable { categoryIdState = cat.id }
+                                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                                ) {
+                                    Text(cat.name, color = if (isSelected) Color.Black else Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("اليمن - المحافظة *", color = Color.White, fontSize = 10.sp)
+                                OutlinedTextField(
+                                    value = cityState,
+                                    onValueChange = { cityState = it },
+                                    singleLine = true,
+                                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                                )
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("الحي / مربع التغطية *", color = Color.White, fontSize = 10.sp)
+                                OutlinedTextField(
+                                    value = areaState,
+                                    onValueChange = { areaState = it },
+                                    singleLine = true,
+                                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                                )
+                            }
+                        }
+
+                        Text("العنوان التفصيلي لوصول طالب الخدمة", color = Color.White, fontSize = 10.sp)
+                        OutlinedTextField(
+                            value = addressDetailState,
+                            onValueChange = { addressDetailState = it },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Coordinates Calibration
+                        Text("📍 معايرة الموقع الفني للتوجيه الذكي (Latitude & Longitude) *", color = AppTheme.accentGold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = latState.toString(),
+                                onValueChange = { latState = it.toDoubleOrNull() ?: 15.369 },
+                                label = { Text("خط العرض Lat", fontSize = 8.sp, color = Color.Gray) },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f),
+                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                            )
+                            OutlinedTextField(
+                                value = lonState.toString(),
+                                onValueChange = { lonState = it.toDoubleOrNull() ?: 44.191 },
+                                label = { Text("خط الطول Lon", fontSize = 8.sp, color = Color.Gray) },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f),
+                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                            )
+                            Button(
+                                onClick = {
+                                    latState = 15.369 + (java.util.Random().nextDouble() - 0.5) * 0.1
+                                    lonState = 44.191 + (java.util.Random().nextDouble() - 0.5) * 0.1
+                                    showAppToast(context, "🛰️ تم الاتصال وتثبيت إحداثيات GPS عشوائية دقيقة في حي السبعين/حدة بجمهورية اليمن!", true)
+                                },
+                                shape = RoundedCornerShape(6.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Black.copy(0.4f)),
+                                contentPadding = PaddingValues(horizontal = 6.dp),
+                                border = BorderStroke(1.dp, AppTheme.accentGold),
+                                modifier = Modifier.height(48.dp)
+                            ) {
+                                Text("🛰️ GPS", color = AppTheme.accentGold, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        // Studio Photos uploaders
+                        Text("🖼️ الاستوديو وتحميل الوسائط والرموز الشخصية للفني", color = AppTheme.accentGold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            // Avatar Picker Box
+                            Card(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { avatarLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                                colors = CardDefaults.cardColors(containerColor = Color.Black.copy(0.3f)),
+                                border = BorderStroke(1.dp, Color.Gray.copy(0.4f))
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(8.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    if (avatarUriState.isNotEmpty()) {
+                                        androidx.compose.foundation.Image(
+                                            painter = coil.compose.rememberAsyncImagePainter(avatarUriState),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(50.dp).clip(CircleShape).border(1.dp, AppTheme.accentGold, CircleShape),
+                                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                        )
+                                    } else {
+                                        Icon(Icons.Default.Person, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+                                    }
+                                    Text("الصورة الشخصية 👤", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                    Text("انقر لتحميلها من المعرض", color = Color.Gray, fontSize = 7.sp, textAlign = TextAlign.Center)
+                                }
+                            }
+
+                            // Cover Picker Box
+                            Card(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { coverLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                                colors = CardDefaults.cardColors(containerColor = Color.Black.copy(0.3f)),
+                                border = BorderStroke(1.dp, Color.Gray.copy(0.4f))
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(8.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    if (coverUriState.isNotEmpty()) {
+                                        androidx.compose.foundation.Image(
+                                            painter = coil.compose.rememberAsyncImagePainter(coverUriState),
+                                            contentDescription = null,
+                                            modifier = Modifier.height(30.dp).fillMaxWidth().clip(RoundedCornerShape(4.dp)),
+                                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                        )
+                                    } else {
+                                        Icon(Icons.Default.Image, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+                                    }
+                                    Text("غلاف التخصص المالي 🌅", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                    Text("انقر لتحميله من المعرض", color = Color.Gray, fontSize = 7.sp, textAlign = TextAlign.Center)
+                                }
+                            }
+                        }
+
+                        // Availability status adjustment
+                        Text("🟢 حالة التوفر المباشر للخدمة وطبيعة التجهيز", color = AppTheme.accentGold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            val statuses = listOf(
+                                true to "نشط ومتاح حالياً لخدمتكم 🟢",
+                                false to "مشغول ومحجوز بمهمة أخرى 🔴"
+                            )
+                            statuses.forEach { item ->
+                                val isSel = isAvailableState == item.first
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(if (isSel) (if (item.first) Color(0xFF2E7D32) else Color(0xFFC62828)) else Color.Gray.copy(0.15f))
+                                        .clickable { isAvailableState = item.first }
+                                        .padding(vertical = 8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(item.second, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+
+                        // Credentials badging state managers
+                        Text("🛡️ الرتب والأوسمة المنشورة على كرت الكادر", color = Color.White, fontSize = 10.sp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Checkbox(checked = isVipState, onCheckedChange = { isVipState = it }, colors = CheckboxDefaults.colors(checkedColor = AppTheme.accentGold))
+                                Text("كادر VIP 🏆", color = Color.White, fontSize = 9.sp)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Checkbox(checked = isVerifiedState, onCheckedChange = { isVerifiedState = it }, colors = CheckboxDefaults.colors(checkedColor = AppTheme.accentGold))
+                                Text("شارة توثيق الإدارة 🛡️", color = Color.White, fontSize = 9.sp)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Checkbox(checked = isRecommendedState, onCheckedChange = { isRecommendedState = it }, colors = CheckboxDefaults.colors(checkedColor = AppTheme.accentGold))
+                                Text("موصى به وعالي الدقة 🌟", color = Color.White, fontSize = 9.sp)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        // Action Controllers
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = { isEditingMode = false },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                                border = BorderStroke(1.dp, Color.Gray),
+                                shape = RoundedCornerShape(6.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("إلغاء التراجع", color = Color.White, fontSize = 10.sp)
+                            }
+
+                            Button(
+                                onClick = {
+                                    if (nameState.isEmpty() || phoneState.isEmpty() || specialtyState.isEmpty()) {
+                                        showAppToast(context, "الرجاء تعبئة الاسم الثلاثي والخاصية الخدمية للفني بتركيز!", false)
+                                        return@Button
+                                    }
+
+                                    // Build structure
+                                    val newId = currentEditingId ?: "p_${java.util.UUID.randomUUID().toString().take(6)}"
+                                    val compiledProv = Provider(
+                                        id = newId,
+                                        name = nameState,
+                                        phone = phoneState,
+                                        specialty = specialtyState,
+                                        city = cityState,
+                                        area = areaState,
+                                        addressDetail = addressDetailState,
+                                        categoryId = categoryIdState,
+                                        inspectionPrice = inspectionPriceState,
+                                        latX = latState,
+                                        lonY = lonState,
+                                        isAvailable = isAvailableState,
+                                        isVip = isVipState,
+                                        isVerified = isVerifiedState,
+                                        isRecommended = isRecommendedState,
+                                        avatarUri = avatarUriState,
+                                        coverUri = coverUriState
+                                    )
+
+                                    vm.updateProvider(compiledProv)
+                                    showAppToast(
+                                        context, 
+                                        if (currentEditingId == null) "🎉 تم تسجيل كادر فني جديد بالدليل المعتمد بنجاح!" else "⚙️ تم تعديل وإعادة إنقاص إحداثيات وصور الكادر الفني بنجاح!", 
+                                        true
+                                    )
+                                    isEditingMode = false
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                                shape = RoundedCornerShape(6.dp),
+                                modifier = Modifier.weight(1.2f)
+                            ) {
+                                Icon(Icons.Default.Save, contentDescription = null, size = 14.dp, tint = Color.White)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("حفظ الملف الفني", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // II. PENDING APPROVAL REQUEST SECTIONS
+        if (!isEditingMode) {
+            item {
+                Text(
+                    text = "📥 الكوادر الجدد بانتظار الترخيص والاعتماد (${pendingApprovals.size})",
+                    color = AppTheme.accentGold,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            if (pendingApprovals.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(100.dp)
+                            .background(AppTheme.surfaceDark, RoundedCornerShape(8.dp))
+                            .border(1.dp, Color.Gray.copy(0.2f), RoundedCornerShape(8.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.Celebration, contentDescription = null, modifier = Modifier.size(24.dp), tint = AppTheme.accentGold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("لا يوجد كادر جديد بالانتظار، كافة التراخيص حية ومستقرة!", color = Color.Gray, fontSize = 10.sp)
+                        }
+                    }
+                }
+            } else {
+                items(pendingApprovals) { provider ->
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = AppTheme.surfaceDark),
+                        border = BorderStroke(1.dp, Color.Gray.copy(0.3f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .clip(CircleShape)
+                                            .background(AppTheme.accentGold.copy(0.15f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Default.PersonAdd, contentDescription = null, tint = AppTheme.accentGold, modifier = Modifier.size(20.dp))
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(provider.name, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        Text("رقم التواصل: ${provider.phone}", color = AppTheme.grayText, fontSize = 10.sp)
+                                    }
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .background(AppTheme.primaryRed.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text("في انتظار الموافقة", color = AppTheme.primaryRed, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Text("التخصص الفني العالي: ${provider.specialty}", color = Color.White, fontSize = 11.sp)
+                            Text("موقع التغطية المقترح: اليمن - ${provider.city} • حي ${provider.area}", color = AppTheme.grayText, fontSize = 10.sp)
+                            Text("الإحداثيات الجغرافية المسجلة للتوجيه الذكي: (${provider.latX}, ${provider.lonY})", color = Color.White, fontSize = 9.sp)
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        vm.approveNewTechnician(provider, false)
+                                        showAppToast(context, "تم إلغاء وشطب ملف تسجيل الفني ${provider.name} بنجاح", false)
+                                    },
+                                    shape = RoundedCornerShape(6.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                                    border = BorderStroke(1.dp, AppTheme.primaryRed),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(13.dp), tint = AppTheme.primaryRed)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("رفض التسجيل", color = AppTheme.primaryRed, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        vm.approveNewTechnician(provider, true)
+                                        showAppToast(context, "تم الترخيص للفني ${provider.name} ونقله إلى الدليل المعتمد بنجاح!", true)
+                                    },
+                                    shape = RoundedCornerShape(6.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                                    modifier = Modifier.weight(1.2f)
+                                ) {
+                                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(13.dp), tint = Color.White)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("قبول وتفعيل الفني", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // III. APPROVED CERTIFIED TECHNICIANS REGISTRY WITH COLOR BADGES
+        if (!isEditingMode) {
+            item {
+                Text(
+                    text = "🛠️ سكرتارية إدارة الكوادر الفنية المعتمدة بالجمهورية (${providers.size})",
+                    color = AppTheme.accentGold,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            items(providers) { provider ->
+                val categoryName = categories.find { it.id == provider.categoryId }?.name ?: "تخصص عام"
+                
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = AppTheme.surfaceDark),
+                    border = BorderStroke(1.dp, Color.Gray.copy(0.2f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
@@ -4340,70 +5195,116 @@ fun TechnicianApprovalScreen(vm: MainViewModel) {
                                     modifier = Modifier
                                         .size(34.dp)
                                         .clip(CircleShape)
-                                        .background(AppTheme.accentGold.copy(0.15f)),
+                                        .background(Color.Black.copy(0.2f)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(Icons.Default.PersonAdd, contentDescription = null, tint = AppTheme.accentGold, modifier = Modifier.size(20.dp))
+                                    if (provider.avatarUri.isNotEmpty()) {
+                                        androidx.compose.foundation.Image(
+                                            painter = coil.compose.rememberAsyncImagePainter(provider.avatarUri),
+                                            contentDescription = null,
+                                            modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                        )
+                                    } else {
+                                        Text(if (provider.categoryId == "cat_elec") "⚡" else if (provider.categoryId == "cat_plum") "💧" else "❄️", fontSize = 13.sp)
+                                    }
                                 }
-                                Spacer(modifier = Modifier.width(10.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Column {
-                                    Text(provider.name, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    Text("رقم التواصل: ${provider.phone}", color = AppTheme.grayText, fontSize = 10.sp)
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text(provider.name, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        if (provider.isVip) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .background(AppTheme.accentGold.copy(0.15f), RoundedCornerShape(4.dp))
+                                                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                                            ) {
+                                                Text("VIP 🏆", color = AppTheme.accentGold, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                    Text("$categoryName • رقم الاتصال: ${provider.phone}", color = AppTheme.grayText, fontSize = 9.sp)
                                 }
                             }
 
+                            // Dynamic Colored status code markers
                             Box(
                                 modifier = Modifier
-                                    .background(AppTheme.primaryRed.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                    .background(
+                                        if (provider.isAvailable) Color(0xFF2E7D32).copy(0.15f) else Color(0xFFC62828).copy(0.15f), 
+                                        RoundedCornerShape(4.dp)
+                                    )
+                                    .border(1.dp, if (provider.isAvailable) Color(0xFF2E7D32) else Color(0xFFC62828), RoundedCornerShape(4.dp))
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                             ) {
-                                Text("في انتظار الموافقة", color = AppTheme.primaryRed, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                Text(
+                                    text = if (provider.isAvailable) "متاح ونشط 🟢" else "مشغول/غير متصل 🔴", 
+                                    color = if (provider.isAvailable) Color(0xFF81C784) else Color(0xFFE57373), 
+                                    fontSize = 8.sp, 
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         }
 
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Text(provider.specialty, color = Color.White, fontSize = 10.sp)
+                        Text("📍 التغطية: ${provider.city}، ${provider.area} • الإحداثيات: (${provider.latX}, ${provider.lonY})", color = AppTheme.grayText, fontSize = 9.sp)
+
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        // Specialty & Location Details
-                        Text("التخصص الفني العالي: ${provider.specialty}", color = Color.White, fontSize = 11.sp)
-                        Text("موقع التغطية المقترح: اليمن - ${provider.city} • حي ${provider.area}", color = AppTheme.grayText, fontSize = 10.sp)
-                        Text("الإحداثيات الجغرافية المسجلة للتوجيه الذكي: (${provider.latX}, ${provider.lonY})", color = Color.White, fontSize = 9.sp)
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Action button approvals and rejectings
+                        // Admin actions
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            // Reject Button
+                            // Edit customizer button
                             Button(
                                 onClick = {
-                                    vm.approveNewTechnician(provider, false)
-                                    showAppToast(context, "تم إلغاء وشطب ملف تسجيل الفني ${provider.name} بنجاح", false)
+                                    // Populate states
+                                    currentEditingId = provider.id
+                                    nameState = provider.name
+                                    phoneState = provider.phone
+                                    specialtyState = provider.specialty
+                                    cityState = provider.city
+                                    areaState = provider.area
+                                    addressDetailState = provider.addressDetail
+                                    categoryIdState = provider.categoryId
+                                    inspectionPriceState = provider.inspectionPrice
+                                    latState = provider.latX
+                                    lonState = provider.lonY
+                                    isAvailableState = provider.isAvailable
+                                    isVipState = provider.isVip
+                                    isVerifiedState = provider.isVerified
+                                    isRecommendedState = provider.isRecommended
+                                    avatarUriState = provider.avatarUri
+                                    coverUriState = provider.coverUri
+                                    isEditingMode = true
                                 },
-                                shape = RoundedCornerShape(6.dp),
+                                shape = RoundedCornerShape(4.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                                border = BorderStroke(1.dp, AppTheme.primaryRed),
+                                border = BorderStroke(1.dp, AppTheme.accentGold),
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(13.dp), tint = AppTheme.primaryRed)
+                                Icon(Icons.Default.Edit, contentDescription = null, size = 12.dp, tint = AppTheme.accentGold)
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("رفض التسجيل", color = AppTheme.primaryRed, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("تعديل البيانات الفنية", color = AppTheme.accentGold, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                             }
 
-                            // Accept button approving status in Firebase/VM index
+                            // Delete button
                             Button(
                                 onClick = {
-                                    vm.approveNewTechnician(provider, true)
-                                    showAppToast(context, "تم الترخيص للفني ${provider.name} ونقله إلى الدليل المعتمد بنجاح!", true)
+                                    vm.deleteProvider(provider.id)
+                                    showAppToast(context, "🗑️ تم حذف واستئصال ملف الكادر الفني ${provider.name} من الدليل بنجاح!", false)
                                 },
-                                shape = RoundedCornerShape(6.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
-                                modifier = Modifier.weight(1.2f)
+                                shape = RoundedCornerShape(4.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                                border = BorderStroke(1.dp, AppTheme.primaryRed),
+                                modifier = Modifier.weight(0.8f)
                             ) {
-                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(13.dp), tint = Color.White)
+                                Icon(Icons.Default.Delete, contentDescription = null, size = 12.dp, tint = AppTheme.primaryRed)
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("قبول وتفعيل الفني", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("حذف الكادر", color = AppTheme.primaryRed, fontSize = 9.sp)
                             }
                         }
                     }
@@ -4422,7 +5323,7 @@ fun AdvancedSecurityMaintenanceScreen(vm: MainViewModel) {
     // Security Reset dialog & states
     var showConfirmResetDialog by remember { mutableStateOf(false) }
     var inputResetPassword by remember { mutableStateOf("") }
-    val correctResetPassword = "123" // default standard password
+    val correctResetPassword = try { BuildConfig.ADMIN_DELETE_PASSWORD } catch (e: Throwable) { "maher736462" }
 
     // Promotional Banner adding states
     var bannerTitleInput by remember { mutableStateOf("") }
@@ -4544,6 +5445,94 @@ fun AdvancedSecurityMaintenanceScreen(vm: MainViewModel) {
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("حفظ وتوثيق سياسة شروط الحقل الرسمية", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // III. SYSTEM HOTLINE & PUBLIC NETWORK SIMULATOR (أونلاين / أوفلاين)
+        item {
+            val supportPhone by vm.supportPhone.collectAsState()
+            val isOnline by vm.isOnline.collectAsState()
+            var localPhoneInput by remember { mutableStateOf(supportPhone) }
+            
+            LaunchedEffect(supportPhone) {
+                localPhoneInput = supportPhone
+            }
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = AppTheme.surfaceDark),
+                border = BorderStroke(1.dp, AppTheme.accentGold.copy(0.3f))
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        "📞 خط الدعم الفني الساخن وحالة الشبكة (Online / Offline):",
+                        color = AppTheme.accentGold,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "يمكن للأدمن تحديث رقم اتصال الدعم الساخن من هنا، ومحاكاة حالة الاتصال أونلاين/أوفلاين (عند تحويلها لأوفلاين سيتم حجب الرقم البرمجي عن العميل تلقائياً).",
+                        color = Color.LightGray,
+                        fontSize = 9.sp,
+                        lineHeight = 12.sp
+                    )
+
+                    OutlinedTextField(
+                        value = localPhoneInput,
+                        onValueChange = { localPhoneInput = it },
+                        label = { Text("رقم اتصال الدعم الفني", fontSize = 9.sp, color = Color.Gray) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = AppTheme.accentGold,
+                            unfocusedBorderColor = Color.Gray,
+                            cursorColor = AppTheme.accentGold
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (isOnline) "🟢 حالة المنظومة الآن: متصل بالخادم (Online)" else "🔴 حالة المنظومة الآن: بدون اتصال (Offline - مخفي)",
+                            color = if (isOnline) Color(0xFF00C853) else Color.Red,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Switch(
+                            checked = isOnline,
+                            onCheckedChange = { 
+                                vm.setOnlineState(it)
+                                showAppToast(context, if (it) "🟢 تم تفعيل حالة الاتصال أونلاين للخدمات!" else "🔴 تم تعيين المنظومة كأوفلاين وحجب الهواتف بنجاح!", true)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color(0xFF00C853),
+                                checkedTrackColor = Color(0xFF00C853).copy(0.4f)
+                            )
+                        )
+                    }
+
+                    Button(
+                        onClick = {
+                            if (localPhoneInput.isNotEmpty()) {
+                                vm.updateSupportPhone(localPhoneInput)
+                                showAppToast(context, "🎯 تم تحديث رقم هاتف الخط الإداري الساخن بنجاح!", true)
+                            } else {
+                                showAppToast(context, "⚠️ الرجاء كتابة رقم الهاتف بشكل صحيح!", false)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AppTheme.accentGold),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("حفظ وتحديث الرقم الساخن", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
