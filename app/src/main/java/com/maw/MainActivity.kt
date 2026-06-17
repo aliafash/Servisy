@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import android.speech.RecognizerIntent
+import android.speech.tts.TextToSpeech
 import android.app.Activity
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
@@ -881,11 +882,44 @@ fun calculateDistanceInKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double
 
 // --- MAIN SCREEN ---
 class MainActivity : ComponentActivity() {
+    companion object {
+        private var tts: TextToSpeech? = null
+        private var isTtsReady = false
+
+        fun speak(context: Context, text: String) {
+            val cleanTextBeforeSpeech = text.replace("🔒", "").replace("🤫", "").replace("🤖", "").replace("📢", "").replace("💡", "").trim()
+            if (tts == null) {
+                tts = TextToSpeech(context) { status ->
+                    if (status == TextToSpeech.SUCCESS) {
+                        try {
+                            tts?.language = java.util.Locale("ar")
+                        } catch (e: java.lang.Exception) {}
+                        isTtsReady = true
+                        tts?.speak(cleanTextBeforeSpeech, TextToSpeech.QUEUE_FLUSH, null, null)
+                    }
+                }
+            } else {
+                tts?.speak(cleanTextBeforeSpeech, TextToSpeech.QUEUE_FLUSH, null, null)
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        try {
+            tts?.stop()
+            tts?.shutdown()
+        } catch (e: java.lang.Exception) {}
+        tts = null
+        isTtsReady = false
+        super.onDestroy()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             var isUserRole by remember { mutableStateOf(true) }
+            var activeUserTab by remember { mutableStateOf(0) } // Lifted state: 0 = دليل الكوادر, 1 = المساعد الذكي, 2 = خارطة الكوادر
             val vm: MainViewModel = viewModel()
             val context = LocalContext.current
             var showAdminLoginDialog by remember { mutableStateOf(false) }
@@ -898,74 +932,76 @@ class MainActivity : ComponentActivity() {
                     color = AppTheme.darkBg
                 ) {
                     Column(modifier = Modifier.fillMaxSize()) {
-                        // Custom Status Bar / Header
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(AppTheme.surfaceDark)
-                                .padding(14.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Construction,
-                                    contentDescription = "App Icon",
-                                    tint = AppTheme.accentGold,
-                                    modifier = Modifier.size(28.dp)
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column {
-                                    Text(
-                                        text = "كل خدمات اليمن 🇾🇪",
-                                        color = Color.White,
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.SansSerif
-                                    )
-                                    Text(
-                                        text = "الدليل المهني والخدمات الموثقة لليمن الأسعد",
-                                        color = AppTheme.grayText,
-                                        fontSize = 9.sp
-                                    )
-                                }
-                            }
-
-                            // Role Switcher
+                        // Custom Status Bar / Header (hidden completely when in immersive AI chat fullscreen mode)
+                        if (!isUserRole || activeUserTab != 1) {
                             Row(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(30.dp))
-                                    .background(Color.Black.copy(alpha = 0.4f))
-                                    .clickable {
-                                        if (isUserRole) {
-                                            showAdminLoginDialog = true
-                                        } else {
-                                            isUserRole = true
-                                            showAppToast(context, "👋 تم تسجيل الخروج من وضع المسؤول بنجاح!", true)
-                                        }
-                                    }
-                                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    .fillMaxWidth()
+                                    .background(AppTheme.surfaceDark)
+                                    .padding(14.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = if (isUserRole) Icons.Default.Person else Icons.Default.Security,
-                                    contentDescription = "Mode Icon",
-                                    tint = AppTheme.accentGold,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Text(
-                                    text = if (isUserRole) "واجهة العميل" else "لوحة الأدمن",
-                                    color = Color.White,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Construction,
+                                        contentDescription = "App Icon",
+                                        tint = AppTheme.accentGold,
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            text = "كل خدمات اليمن 🇾🇪",
+                                            color = Color.White,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = FontFamily.SansSerif
+                                        )
+                                        Text(
+                                            text = "الدليل المهني والخدمات الموثقة لليمن الأسعد",
+                                            color = AppTheme.grayText,
+                                            fontSize = 9.sp
+                                        )
+                                    }
+                                }
+
+                                // Role Switcher
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(30.dp))
+                                        .background(Color.Black.copy(alpha = 0.4f))
+                                        .clickable {
+                                            if (isUserRole) {
+                                                showAdminLoginDialog = true
+                                            } else {
+                                                isUserRole = true
+                                                showAppToast(context, "👋 تم تسجيل الخروج من وضع المسؤول بنجاح!", true)
+                                            }
+                                        }
+                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = if (isUserRole) Icons.Default.Person else Icons.Default.Security,
+                                        contentDescription = "Mode Icon",
+                                        tint = AppTheme.accentGold,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = if (isUserRole) "واجهة العميل" else "لوحة الأدمن",
+                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
 
                         // App Content based on Role Switcher
                         if (isUserRole) {
-                            UserWorkspace(vm)
+                            UserWorkspace(vm, activeUserTab, onTabChanged = { activeUserTab = it })
                         } else {
                             AdminDashboardWorkspace(vm)
                         }
@@ -994,8 +1030,10 @@ class MainActivity : ComponentActivity() {
                                                 focusedTextColor = Color.White,
                                                 unfocusedTextColor = Color.White,
                                                 focusedBorderColor = AppTheme.accentGold,
-                                                unfocusedBorderColor = Color.Gray,
-                                                cursorColor = AppTheme.accentGold
+                                                unfocusedBorderColor = Color.LightGray,
+                                                cursorColor = AppTheme.accentGold,
+                                                focusedContainerColor = Color(0xFF1B2A2D),
+                                                unfocusedContainerColor = Color(0xFF10191B)
                                             ),
                                             modifier = Modifier.fillMaxWidth()
                                         )
@@ -1010,8 +1048,10 @@ class MainActivity : ComponentActivity() {
                                                 focusedTextColor = Color.White,
                                                 unfocusedTextColor = Color.White,
                                                 focusedBorderColor = AppTheme.accentGold,
-                                                unfocusedBorderColor = Color.Gray,
-                                                cursorColor = AppTheme.accentGold
+                                                unfocusedBorderColor = Color.LightGray,
+                                                cursorColor = AppTheme.accentGold,
+                                                focusedContainerColor = Color(0xFF1B2A2D),
+                                                unfocusedContainerColor = Color(0xFF10191B)
                                             ),
                                             modifier = Modifier.fillMaxWidth()
                                         )
@@ -1075,6 +1115,7 @@ fun ServiceProviderCard(
     cardPaddingDp: Int,
     cardCornerRadiusDp: Int,
     cardSettings: CardSettings = CardSettings(),
+    isOnline: Boolean = true,
     onBookClick: () -> Unit,
     onCallClick: () -> Unit,
     onDetailsClick: () -> Unit
@@ -1354,7 +1395,13 @@ fun ServiceProviderCard(
                                 .size((cardSettings.avatarSize * 0.35).coerceAtLeast(14.0).dp)
                                 .clip(CircleShape)
                                 .background(Color(0xFF2E7D32))
-                                .clickable { onCallClick() }
+                                .clickable {
+                                    if (isOnline && provider.isAvailable) {
+                                        onCallClick()
+                                    } else {
+                                        showAppToast(context, "🔒 رقم الفني مخفي مؤقتاً لعدم الاتصال بالشبكة أو لأنه مشغول!", false)
+                                    }
+                                }
                                 .border(1.dp, Color.White, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
@@ -1381,7 +1428,13 @@ fun ServiceProviderCard(
                         if (cleanAction == "اتصال" || cleanAction == "call") {
                             if (cardSettings.showCall) {
                                 Button(
-                                    onClick = onCallClick,
+                                    onClick = {
+                                        if (isOnline && provider.isAvailable) {
+                                            onCallClick()
+                                        } else {
+                                            showAppToast(context, "🔒 رقم الفني مخفي مؤقتاً لعدم الاتصال بالشبكة أو لأنه مشغول!", false)
+                                        }
+                                    },
                                     shape = RoundedCornerShape(6.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = safeParseColor(cardSettings.callColorHex, Color(0xFF4CAF50))),
                                     modifier = Modifier.weight(1f),
@@ -1396,12 +1449,16 @@ fun ServiceProviderCard(
                             if (cardSettings.showWhatsapp) {
                                 Button(
                                     onClick = {
-                                        try {
-                                            val uriStr = "https://api.whatsapp.com/send?phone=967${provider.phone}"
-                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uriStr))
-                                            context.startActivity(intent)
-                                        } catch (e: Exception) {
-                                            showAppToast(context, "لم نتمكن من فتح تطبيق واتساب", false)
+                                        if (isOnline && provider.isAvailable) {
+                                            try {
+                                                val uriStr = "https://api.whatsapp.com/send?phone=967${provider.phone}"
+                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uriStr))
+                                                context.startActivity(intent)
+                                            } catch (e: Exception) {
+                                                showAppToast(context, "لم نتمكن من فتح تطبيق واتساب", false)
+                                            }
+                                        } else {
+                                            showAppToast(context, "🔒 رقم الواتساب مخفي مؤقتاً لعدم الاتصال بالشبكة أو لأنه مشغول!", false)
                                         }
                                     },
                                     shape = RoundedCornerShape(6.dp),
@@ -1453,7 +1510,7 @@ fun ServiceProviderCard(
 // --- PRIMARY CLIENT WORKSPACE VIEW ---
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-fun UserWorkspace(vm: MainViewModel) {
+fun UserWorkspace(vm: MainViewModel, activeUserTab: Int, onTabChanged: (Int) -> Unit) {
     val providers by vm.providers.collectAsState()
     val categories by vm.categories.collectAsState()
     val formFields by vm.formFields.collectAsState()
@@ -1466,7 +1523,6 @@ fun UserWorkspace(vm: MainViewModel) {
     val cardPadding by vm.cardPadding.collectAsState()
     val cardCornerRadius by vm.cardCornerRadius.collectAsState()
 
-    var activeUserTab by remember { mutableStateOf(0) } // 0 = دليل الكوادر, 1 = المساعد الذكي, 2 = خارطة الكوادر
     var selectedCategoryFilter by remember { mutableStateOf("All") }
     var searchQuery by remember { mutableStateOf("") }
     var showBookingDialogFor by remember { mutableStateOf<Provider?>(null) }
@@ -1503,7 +1559,7 @@ fun UserWorkspace(vm: MainViewModel) {
             listOf("الكوادر والخدمات 🛠️", "المساعد الذكي 🤖", "خارطة الكوادر المجاورة 🗺️").forEachIndexed { index, label ->
                 Tab(
                     selected = activeUserTab == index,
-                    onClick = { activeUserTab = index },
+                    onClick = { onTabChanged(index) },
                     text = { Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 )
             }
@@ -1608,6 +1664,18 @@ fun UserWorkspace(vm: MainViewModel) {
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
+                                IconButton(
+                                    onClick = { MainActivity.speak(context, currentBanner.title) },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.VolumeUp,
+                                        contentDescription = "استمع للإعلان بصوت المساعد",
+                                        tint = AppTheme.accentGold,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = currentBanner.title,
                                     color = Color.White,
@@ -1759,6 +1827,7 @@ fun UserWorkspace(vm: MainViewModel) {
                                 cardPaddingDp = cardPadding,
                                 cardCornerRadiusDp = cardCornerRadius,
                                 cardSettings = cardSettings,
+                                isOnline = isOnline,
                                 onCallClick = {
                                     val intent = Intent(Intent.ACTION_DIAL).apply {
                                         data = Uri.parse("tel:${prov.phone}")
@@ -1898,6 +1967,19 @@ fun UserWorkspace(vm: MainViewModel) {
                                                     fontSize = 11.sp
                                                 )
                                                 Spacer(modifier = Modifier.height(2.dp))
+                                                if (!isUser) {
+                                                    IconButton(
+                                                        onClick = { MainActivity.speak(context, msg.text) },
+                                                        modifier = Modifier.size(22.dp).align(Alignment.Start)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.VolumeUp,
+                                                            contentDescription = "قراءة الرسالة صوتياً",
+                                                            tint = AppTheme.accentGold,
+                                                            modifier = Modifier.size(14.dp)
+                                                        )
+                                                    }
+                                                }
                                                 Text(
                                                     text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(msg.timestamp)),
                                                     color = if (isUser) Color.Black.copy(0.5f) else Color.Gray,
@@ -1916,26 +1998,30 @@ fun UserWorkspace(vm: MainViewModel) {
                     // Input box for Chat
                     var userPromptText by remember { mutableStateOf("") }
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         OutlinedTextField(
                             value = userPromptText,
                             onValueChange = { userPromptText = it },
-                            placeholder = { Text("اكتب استفسارك هنا للفني الذكية...", fontSize = 11.sp, color = Color.Gray) },
+                            placeholder = { Text("اكتب استفسارك هنا للفني الذكي والمساعد...", fontSize = 12.sp, color = Color.Gray) },
                             singleLine = true,
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = Color.White,
                                 unfocusedTextColor = Color.White,
-                                focusedBorderColor = AppTheme.accentGold
+                                focusedBorderColor = AppTheme.accentGold,
+                                focusedContainerColor = Color(0xFF1E2F32),
+                                unfocusedContainerColor = Color(0xFF122022)
                             ),
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp)
+                            modifier = Modifier.weight(1f).heightIn(min = 54.dp),
+                            shape = RoundedCornerShape(12.dp)
                         )
                         Button(
-                            shape = RoundedCornerShape(8.dp),
+                            shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = AppTheme.accentGold),
+                            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
+                            modifier = Modifier.heightIn(min = 54.dp),
                             onClick = {
                                 if (userPromptText.trim().isNotEmpty()) {
                                     vm.sendChatMessage(userPromptText.trim())
@@ -1943,7 +2029,7 @@ fun UserWorkspace(vm: MainViewModel) {
                                 }
                             }
                         ) {
-                            Text("إرسال", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("إرسال 🚀", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -2659,6 +2745,8 @@ fun ReportsScreen(vm: MainViewModel) {
     var selectedReportStatus by remember { mutableStateOf("All") }
     // Region area text filter
     var selectedReportRegion by remember { mutableStateOf("") }
+    // Search query query filter
+    var selectedReportSearch by remember { mutableStateOf("") }
 
     var showManualAddBookingDialog by remember { mutableStateOf(false) }
     var editingBooking by remember { mutableStateOf<Booking?>(null) }
@@ -2737,6 +2825,49 @@ fun ReportsScreen(vm: MainViewModel) {
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
+                            Text("البحث بالاسم أو الهاتف 🔍", color = Color.White, fontSize = 9.sp)
+                            OutlinedTextField(
+                                value = selectedReportSearch,
+                                onValueChange = { selectedReportSearch = it },
+                                singleLine = true,
+                                placeholder = { Text("مثال: خالد", color = Color.Gray, fontSize = 9.sp) },
+                                modifier = Modifier.height(44.dp).fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = AppTheme.accentGold,
+                                    unfocusedBorderColor = Color.Gray,
+                                    cursorColor = AppTheme.accentGold
+                                ),
+                                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 10.sp, color = Color.White)
+                            )
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("تصفية حسب المنطقة/الحي الحقيقي 📍", color = Color.White, fontSize = 9.sp)
+                            OutlinedTextField(
+                                value = selectedReportRegion,
+                                onValueChange = { selectedReportRegion = it },
+                                singleLine = true,
+                                placeholder = { Text("مثال: حدة", color = Color.Gray, fontSize = 9.sp) },
+                                modifier = Modifier.height(44.dp).fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = AppTheme.accentGold,
+                                    unfocusedBorderColor = Color.Gray,
+                                    cursorColor = AppTheme.accentGold
+                                ),
+                                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 10.sp, color = Color.White)
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text("القسم المهني للطلب", color = Color.White, fontSize = 9.sp)
                             Row(
                                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -2786,8 +2917,9 @@ fun ReportsScreen(vm: MainViewModel) {
         val activeBookingsFiltered = bookings.filter { b ->
             val matchCat = selectedReportCategory == "All" || b.categoryId == selectedReportCategory
             val matchStatus = selectedReportStatus == "All" || b.status == selectedReportStatus
-            val matchRegion = selectedReportRegion.isEmpty() || b.userArea.contains(selectedReportRegion)
-            matchCat && matchStatus && matchRegion
+            val matchRegion = selectedReportRegion.isEmpty() || b.userArea.contains(selectedReportRegion, ignoreCase = true)
+            val matchSearch = selectedReportSearch.isEmpty() || b.userName.contains(selectedReportSearch, ignoreCase = true) || b.userPhone.contains(selectedReportSearch)
+            matchCat && matchStatus && matchRegion && matchSearch
         }
 
         // 1. STATISTIC METRIC CARDS
@@ -2934,26 +3066,72 @@ fun ReportsScreen(vm: MainViewModel) {
 
         // 4- REPORT: PEAK BOOKING HOURS & DAYS STATISTICS
         item {
+            // Dynamically calculate peak days and periods
+            val dayOfWeekCounts = mutableMapOf("الأحد" to 0, "الإثنين" to 0, "الثلاثاء" to 0, "الأربعاء" to 0, "الخميس" to 0, "الجمعة" to 0, "السبت" to 0)
+            val formatterAr = SimpleDateFormat("EEEE", java.util.Locale("ar"))
+            
+            var morningCount = 0
+            var afternoonCount = 0
+            var eveningCount = 0
+            var peakHourCalc = 12
+
+            bookings.forEach { b ->
+                val dateVal = Date(b.timestamp)
+                val dayArName = formatterAr.format(dateVal)
+                dayOfWeekCounts[dayArName] = (dayOfWeekCounts[dayArName] ?: 0) + 1
+
+                val cal = java.util.Calendar.getInstance()
+                cal.time = dateVal
+                val hr = cal.get(java.util.Calendar.HOUR_OF_DAY)
+                peakHourCalc = hr
+                when (hr) {
+                    in 8..12 -> morningCount++
+                    in 13..17 -> afternoonCount++
+                    else -> eveningCount++
+                }
+            }
+
+            val peakDayEntry = dayOfWeekCounts.maxByOrNull { it.value }
+            val peakDayName = peakDayEntry?.key ?: "الإثنين"
+            val peakDayCountVal = peakDayEntry?.value ?: 0
+
             Card(
                 colors = CardDefaults.cardColors(containerColor = AppTheme.surfaceDark),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text("⏰ تقرير: أوقات الذروة والمواسم المفضلة", color = AppTheme.accentGold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(10.dp))
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("⏰ تقرير أوقات الذروة الإحصائي الذكي", color = AppTheme.accentGold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    
+                    // Highlights box
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(AppTheme.accentGold.copy(0.12f))
+                            .border(0.5.dp, AppTheme.accentGold, RoundedCornerShape(6.dp))
+                            .padding(8.dp)
+                    ) {
+                        Text(
+                            text = "💡 تحليل النشاط: اليوم الأكثر طلباً للحجز هو يوم ($peakDayName) بعدد ($peakDayCountVal) حجوزات منفذة، والفترة المفضلة هي فترة بعد الظهر.",
+                            color = AppTheme.accentGold,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            lineHeight = 12.sp
+                        )
+                    }
 
                     // Peak Hour representation (Morning, Afternoon, Evening)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        val peaks = listOf(
-                            Triple("فترة الصباح 🌅", "8 صباحاً - 12 ظهراً", 45),
-                            Triple("فترة بعد الظهر ☀️", "12 ظهراً - 5 عصراً", 85),
-                            Triple("الفترة المسائية 🌙", "5 عصراً - 10 مساءً", 62)
+                        val peaksText = listOf(
+                            Triple("فترة الصباح 🌅", "8 صباحاً - 12 ظهراً", morningCount),
+                            Triple("فترة بعد الظهر ☀️", "12 ظهراً - 5 عصراً", afternoonCount),
+                            Triple("الفترة المسائية 🌙", "5 عصراً - 10 مساءً", eveningCount)
                         )
 
-                        peaks.forEach { (title, range, bookingCount) ->
+                        peaksText.forEach { (title, range, bookingCount) ->
                             Column(
                                 modifier = Modifier
                                     .weight(1f)
@@ -2964,7 +3142,7 @@ fun ReportsScreen(vm: MainViewModel) {
                                 Text(title, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 Text(range, color = AppTheme.grayText, fontSize = 7.sp, textAlign = TextAlign.Center)
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Text("$bookingCount حجز", color = AppTheme.accentGold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("$bookingCount حجز", color = AppTheme.accentGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -2994,6 +3172,7 @@ fun ReportsScreen(vm: MainViewModel) {
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2)),
                             modifier = Modifier.weight(1f),
                             onClick = {
+                                vm.addAudit("Admin", "تصدير تقرير EXCEL", "نطاق الفلترة من [${inputStartDateStr.ifEmpty { "الكل" }}] إلى [${inputEndDateStr.ifEmpty { "الكل" }}]")
                                 showAppToast(context, "تم توليد وتنزيل تقرير الحجوزات بصيغة EXCEL بنجاح لليمن الأسعد!", true)
                             }
                         ) {
@@ -3007,6 +3186,7 @@ fun ReportsScreen(vm: MainViewModel) {
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF388E3C)),
                             modifier = Modifier.weight(1f),
                             onClick = {
+                                vm.addAudit("Admin", "تصدير تقرير CSV", "نطاق الفلترة من [${inputStartDateStr.ifEmpty { "الكل" }}] إلى [${inputEndDateStr.ifEmpty { "الكل" }}]")
                                 showAppToast(context, "تم تصدير وتجهيز مستند CSV الخاص بالتقارير بنجاح وقابل للقراءة!", true)
                             }
                         ) {
@@ -3020,6 +3200,7 @@ fun ReportsScreen(vm: MainViewModel) {
                             colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
                             modifier = Modifier.weight(1f),
                             onClick = {
+                                vm.addAudit("Admin", "تصدير تقرير PDF", "نطاق الفلترة من [${inputStartDateStr.ifEmpty { "الكل" }}] إلى [${inputEndDateStr.ifEmpty { "الكل" }}]")
                                 showAppToast(context, "تم تصدير نسخة PDF المطبوعة الفورية لتقرير النشاط الشامل بنجاح!", true)
                             }
                         ) {
@@ -4328,6 +4509,8 @@ fun NotificationControlCentre(vm: MainViewModel) {
     var mainBroadcastTitle by remember { mutableStateOf("") }
     var mainBroadcastBody by remember { mutableStateOf("") }
     var targetAudienceSelection by remember { mutableStateOf("All") }
+    var notificationTargetType by remember { mutableStateOf("User ID") } // "User ID", "Region", "Department"
+    var notificationTargetValue by remember { mutableStateOf("") }
 
     // Schedule entry
     var isSchedulingRequired by remember { mutableStateOf(false) }
@@ -4713,7 +4896,7 @@ fun TechnicianApprovalScreen(vm: MainViewModel) {
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                         shape = RoundedCornerShape(6.dp)
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = null, size = 14.dp, tint = Color.Black)
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.Black)
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("إضافة فني يدوياً", color = Color.Black, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                     }
@@ -5041,7 +5224,7 @@ fun TechnicianApprovalScreen(vm: MainViewModel) {
                                 shape = RoundedCornerShape(6.dp),
                                 modifier = Modifier.weight(1.2f)
                             ) {
-                                Icon(Icons.Default.Save, contentDescription = null, size = 14.dp, tint = Color.White)
+                                Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.White)
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text("حفظ الملف الفني", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
@@ -5286,7 +5469,7 @@ fun TechnicianApprovalScreen(vm: MainViewModel) {
                                 border = BorderStroke(1.dp, AppTheme.accentGold),
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Icon(Icons.Default.Edit, contentDescription = null, size = 12.dp, tint = AppTheme.accentGold)
+                                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(12.dp), tint = AppTheme.accentGold)
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text("تعديل البيانات الفنية", color = AppTheme.accentGold, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                             }
@@ -5302,7 +5485,7 @@ fun TechnicianApprovalScreen(vm: MainViewModel) {
                                 border = BorderStroke(1.dp, AppTheme.primaryRed),
                                 modifier = Modifier.weight(0.8f)
                             ) {
-                                Icon(Icons.Default.Delete, contentDescription = null, size = 12.dp, tint = AppTheme.primaryRed)
+                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(12.dp), tint = AppTheme.primaryRed)
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text("حذف الكادر", color = AppTheme.primaryRed, fontSize = 9.sp)
                             }
