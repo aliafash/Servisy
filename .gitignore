@@ -1,18 +1,14 @@
-# Gradle files
-.gradle/
+# Standard Gitignore for Android Maw app
+.gradle
 build/
 app/build/
-
-# Local configuration file (sdk path, etc)
-local.properties
-
-# Log Files
-*.log
-
-# Android Studio local files
-.idea/
+.idea
 *.iml
+local.properties
+.DS_Store
 
-# Ignore APKs universally EXCEPT app-debug.apk in the root folder
-*.apk
-!/app-debug.apk
+# Protect environment variables and sensitive local settings
+.env
+
+# Explicitly ensure app-debug.apk is tracked and never ignored
+!app-debug.apk
