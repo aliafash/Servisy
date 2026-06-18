@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "1234567890",
-    "project_id": "maw-app-id",
-    "storage_bucket": "maw-app-id.appspot.com"
+    "project_number": "658568660162",
+    "project_id": "wam2026-8d969",
+    "storage_bucket": "wam2026-8d969.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1234567890:android:abcdef123456",
+        "mobilesdk_app_id": "1:658568660162:android:a61a72f574440f54fd275b",
         "android_client_info": {
           "package_name": "com.maw"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "dummy_firebase_api_key_for_compilation"
+          "current_key": "AIzaSyDHSY_vGko5FendFFVqnv5q4MdmnKrLi-g"
         }
       ],
       "services": {

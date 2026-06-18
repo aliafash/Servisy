@@ -1,14 +1,11 @@
-# Standard Gitignore for Android Maw app
-.gradle
+# Git configuration file
+# Ignore Gradle build outputs and caches
+.gradle/
 build/
 app/build/
-.idea
-*.iml
 local.properties
-.DS_Store
 
-# Protect environment variables and sensitive local settings
-.env
-
-# Explicitly ensure app-debug.apk is tracked and never ignored
+# Explicitly ensure app-debug.apk is tracked by Git and not ignored
 !app-debug.apk
+!/app-debug.apk
+

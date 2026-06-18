@@ -1,11 +1,8 @@
 plugins {
-    id("com.android.application") version "8.3.2"
-    id("org.jetbrains.kotlin.android") version "1.9.22"
-}
-
-repositories {
-    google()
-    mavenCentral()
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.serialization")
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -23,19 +20,12 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
-
-        val adminUser = System.getenv("ADMIN_USERNAME") ?: "WAM2026"
-        val adminDeletePass = System.getenv("ADMIN_DELETE_PASSWORD") ?: "maher736462"
-        val adminLoginPass = System.getenv("ADMIN_LOGIN_PASSWORD") ?: "maher--736462"
-
-        buildConfigField("String", "ADMIN_USERNAME", "\"$adminUser\"")
-        buildConfigField("String", "ADMIN_DELETE_PASSWORD", "\"$adminDeletePass\"")
-        buildConfigField("String", "ADMIN_LOGIN_PASSWORD", "\"$adminLoginPass\"")
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -67,39 +57,62 @@ dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.activity:activity-compose:1.8.2")
-    implementation("androidx.compose.ui:ui:1.5.4")
-    implementation("androidx.compose.ui:ui-graphics:1.5.4")
-    implementation("androidx.compose.ui:ui-tooling-preview:1.5.4")
-    implementation("androidx.compose.material3:material3:1.1.2")
-    implementation("androidx.compose.material:material-icons-extended:1.5.4")
+    
+    // Jetpack Compose
+    val composeVersion = "1.6.1"
+    implementation("androidx.compose.ui:ui:$composeVersion")
+    implementation("androidx.compose.ui:ui-graphics:$composeVersion")
+    implementation("androidx.compose.ui:ui-tooling-preview:$composeVersion")
+    implementation("androidx.compose.material3:material3:1.2.0")
+    implementation("androidx.compose.material:material-icons-extended:$composeVersion")
+    
+    // Lifecycle Compose state management
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
-    implementation("androidx.navigation:navigation-compose:2.7.6")
 
-    // Firebase
-    // implementation(platform("com.google.firebase:firebase-bom:32.7.1"))
-    // implementation("com.google.firebase:firebase-firestore-ktx")
-    // implementation("com.google.firebase:firebase-auth-ktx")
-
-    // Coil
+    // Image loading with Coil
     implementation("io.coil-kt:coil-compose:2.5.0")
 
-    // Testing
+    // Firebase (Firestore & Auth & Common BOM)
+    implementation(platform("com.google.firebase:firebase-bom:32.7.2"))
+    implementation("com.google.firebase:firebase-firestore-ktx")
+    implementation("com.google.firebase:firebase-auth-ktx")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+
+    // Gemini API Direct REST Support with Retrofit & OkHttp
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
+    implementation("com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0")
+
+    // Local unit tests
     testImplementation("junit:junit:4.13.2")
 }
 
-// tasks.register("copyApkToRoot") {
-//     dependsOn("assembleDebug")
-//     doLast {
-//         val buildApk = file("build/outputs/apk/debug/app-debug.apk")
-//         val rootApk = file("${rootDir}/app-debug.apk")
-//         val buildOutputsApk = file("${rootDir}/.build-outputs/app-debug.apk")
-//         if (buildApk.exists()) {
-//             buildApk.copyTo(rootApk, overwrite = true)
-//             buildApk.copyTo(buildOutputsApk, overwrite = true)
-//             println("APK copied successfully to root and .build-outputs!")
-//         } else {
-//             println("Source APK not found at ${buildApk.absolutePath}")
-//         }
-//     }
-// }
+project.afterEvaluate {
+    tasks.findByName("assembleDebug")?.finalizedBy("copyApkToBuildOutputs")
+}
+
+tasks.register("copyApkToBuildOutputs") {
+    doLast {
+        val apkFile = file("${project.buildDir}/outputs/apk/debug/app-debug.apk")
+        val destDir = file("${project.rootDir}/build-outputs")
+        if (apkFile.exists()) {
+            destDir.mkdirs()
+            val destFile = file("${destDir}/app-debug.apk")
+            apkFile.copyTo(destFile, overwrite = true)
+            println("Successfully copied APK to build-outputs/app-debug.apk!")
+        } else {
+            // Also try fallback from system .build-outputs
+            val systemApk = file("${project.rootDir}/.build-outputs/app-debug.apk")
+            if (systemApk.exists()) {
+                destDir.mkdirs()
+                val destFile = file("${destDir}/app-debug.apk")
+                systemApk.copyTo(destFile, overwrite = true)
+                println("Successfully copied APK from fallback .build-outputs to build-outputs!")
+            }
+        }
+    }
+}
+
