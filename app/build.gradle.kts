@@ -98,11 +98,13 @@ tasks.register("copyApkToBuildOutputs") {
     doLast {
         val apkFile = file("${project.buildDir}/outputs/apk/debug/app-debug.apk")
         val destDir = file("${project.rootDir}/build-outputs")
+        val rootDestFile = file("${project.rootDir}/app-debug.apk")
         if (apkFile.exists()) {
             destDir.mkdirs()
             val destFile = file("${destDir}/app-debug.apk")
             apkFile.copyTo(destFile, overwrite = true)
-            println("Successfully copied APK to build-outputs/app-debug.apk!")
+            apkFile.copyTo(rootDestFile, overwrite = true)
+            println("Successfully copied APK to build-outputs/app-debug.apk and to the main root folder!")
         } else {
             // Also try fallback from system .build-outputs
             val systemApk = file("${project.rootDir}/.build-outputs/app-debug.apk")
@@ -110,7 +112,8 @@ tasks.register("copyApkToBuildOutputs") {
                 destDir.mkdirs()
                 val destFile = file("${destDir}/app-debug.apk")
                 systemApk.copyTo(destFile, overwrite = true)
-                println("Successfully copied APK from fallback .build-outputs to build-outputs!")
+                systemApk.copyTo(rootDestFile, overwrite = true)
+                println("Successfully copied APK from fallback .build-outputs to build-outputs and to the main root folder!")
             }
         }
     }

@@ -65,6 +65,10 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.ui.draw.scale
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -3352,7 +3356,6 @@ fun ProfessionalCategoryFilterComponent(
                 }
             }
         }
-        }
     }
 
     // Professional profile details dialog
@@ -3549,7 +3552,7 @@ fun ProfessionalCardRow(
                 detectTapGestures(
                     onPress = {
                         isPressed = true
-                        tryAwaitRelease()
+                        try { awaitRelease() } catch (e: Exception) {}
                         isPressed = false
                     },
                     onTap = {
@@ -3832,7 +3835,6 @@ fun ProfessionalCardRow(
             }
         }
     }
-}
 }
 
 // OUR NEW STUNNING METICULOUSLY CRAFTED PROFILE VIEW
@@ -7543,6 +7545,93 @@ fun PrivacyAndChatLogsTab(vm: MainViewModel) {
     var msgToEdit by remember { mutableStateOf<ChatMessage?>(null) }
     var editTxtField by remember { mutableStateOf("") }
 
+    var chatMessageToDelete by remember { mutableStateOf<ChatMessage?>(null) }
+    var chatRoomToDelete by remember { mutableStateOf<Chat?>(null) }
+    var showClearHistoryConfirm by remember { mutableStateOf(false) }
+
+    if (chatMessageToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { chatMessageToDelete = null },
+            title = { Text("⚠️ هل أنت متأكد من حذف هذه الرسالة؟", color = Color.White, fontSize = 13.sp) },
+            text = { Text("سيتم إزالة الرسالة نهائياً من السحابة ولا يمكن التراجع عن هذا الإجراء.", color = Color.LightGray, fontSize = 11.sp) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val m = chatMessageToDelete!!
+                        val msgId = m.id
+                        vm.deleteChatMessage(msgId, "الأدمن") // confirmed msg
+                        chatMessageToDelete = null
+                        Toast.makeText(context, "تم حذف الرسالة المحددة بنجاح من الخادم السحابي!", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed)
+                ) {
+                    Text("نعم، احذف")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { chatMessageToDelete = null }) {
+                    Text("إلغاء", color = Color.White)
+                }
+            },
+            containerColor = AppTheme.surfaceDark
+        )
+    }
+
+    if (chatRoomToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { chatRoomToDelete = null },
+            title = { Text("⚠️ هل أنت متأكد من حذف القناة بالكامل؟", color = Color.White, fontSize = 13.sp) },
+            text = { Text("سيؤدي هذا إلى إغلاق ومسح غرف المحادثة ${chatRoomToDelete!!.providerName} و ${chatRoomToDelete!!.userName} وتطهير كافة السجلات نهائياً.", color = Color.LightGray, fontSize = 11.sp) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val room = chatRoomToDelete!!
+                        val rId = room.id
+                        vm.deleteChatRoom(rId, "الأدمن") // confirmed room
+                        activePeekRoomId = null
+                        chatRoomToDelete = null
+                        Toast.makeText(context, "تم إيقاف وحذف غرفة المحادثة بالكامل من الخوادم السحابية!", Toast.LENGTH_LONG).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed)
+                ) {
+                    Text("نعم، احذف الغرفة")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { chatRoomToDelete = null }) {
+                    Text("إلغاء", color = Color.White)
+                }
+            },
+            containerColor = AppTheme.surfaceDark
+        )
+    }
+
+    if (showClearHistoryConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearHistoryConfirm = false },
+            title = { Text("⚠️ تطهير كلي لسجلات المحادثات؟", color = Color.White, fontSize = 13.sp) },
+            text = { Text("تحذير: هذا سيقوم بحذف كافة غرف المحادثة والرسائل والملفات المتداولة نهائياً لجميع المستخدمين والمقدمين ولا يمكن استرجاعها مطلقاً!", color = Color.LightGray, fontSize = 11.sp) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        vm.clearAllChatHistory("الأدمن")
+                        showClearHistoryConfirm = false
+                        Toast.makeText(context, "تم مسح وتطهير جميع سجلات الغرف والاتصالات الفورية نهائياً سحابياً!", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed)
+                ) {
+                    Text("نعم، طهر كل السجلات")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearHistoryConfirm = false }) {
+                    Text("إلغاء", color = Color.White)
+                }
+            },
+            containerColor = AppTheme.surfaceDark
+        )
+    }
+
     if (msgToEdit != null) {
         AlertDialog(
             onDismissRequest = { msgToEdit = null },
@@ -7590,8 +7679,7 @@ fun PrivacyAndChatLogsTab(vm: MainViewModel) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = {
-                            vm.clearAllChatHistory("الأدمن")
-                            Toast.makeText(context, "تم مسح وتطهير جميع سجلات الغرف والاتصالات الفورية نهائياً سحابياً!", Toast.LENGTH_SHORT).show()
+                            showClearHistoryConfirm = true
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
                         modifier = Modifier.weight(1.2f).height(40.dp)
@@ -7671,8 +7759,8 @@ fun PrivacyAndChatLogsTab(vm: MainViewModel) {
                                                 }
                                                 IconButton(
                                                     onClick = {
-                                                        vm.deleteChatMessage(m.id, "الأدمن")
-                                                        Toast.makeText(context, "تم حذف الرسالة سحابياً!", Toast.LENGTH_SHORT).show()
+                                                        chatMessageToDelete = m
+                                                        // toast deleted
                                                     },
                                                     modifier = Modifier.size(20.dp)
                                                 ) {
@@ -7688,9 +7776,9 @@ fun PrivacyAndChatLogsTab(vm: MainViewModel) {
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             Button(
                                 onClick = {
-                                    vm.deleteChatRoom(room.id, "الأدمن")
+                                    chatRoomToDelete = room
                                     activePeekRoomId = null
-                                    Toast.makeText(context, "تم إيقاف وحذف غرفة المحادثة بالكامل من السيرفر السحابي!", Toast.LENGTH_LONG).show()
+                                    // room toast deleted
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = AppTheme.primaryRed),
                                 modifier = Modifier.height(28.dp).weight(1f)
