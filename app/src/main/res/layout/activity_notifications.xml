@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#0D1B1E"
+    android:padding="16dp"
+    android:textDirection="rtl">
+
+    <TextView
+        android:id="@+id/notificationsTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="🔔 بث الإشعارات الإدارية لجميع المحافظات"
+        android:textColor="#FFD700"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:gravity="right"
+        android:textDirection="rtl"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="قم بإرسال وبث إشعارات جماعية سريعة وفورية لكافة الأجهزة والعملاء النشطين."
+        android:textColor="#FFFFFF"
+        android:textSize="14sp"
+        android:gravity="right"
+        android:textDirection="rtl"
+        android:layout_marginBottom="16dp" />
+
+    <EditText
+        android:id="@+id/etNotificationTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="عنوان الإشعار الإداري العام"
+        android:textColor="#FFFFFF"
+        android:textColorHint="#88FFFFFF"
+        android:backgroundTint="#FFD700"
+        android:gravity="right"
+        android:textDirection="rtl"
+        android:layout_marginBottom="12dp" />
+
+    <EditText
+        android:id="@+id/etNotificationBody"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="محتوى الإشعار بالتفصيل الكامل..."
+        android:textColor="#FFFFFF"
+        android:textColorHint="#88FFFFFF"
+        android:backgroundTint="#FFD700"
+        android:gravity="right"
+        android:textDirection="rtl"
+        android:layout_marginBottom="16dp" />
+
+    <Button
+        android:id="@+id/btnSendNotification"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="بث الإشعار الآن 🚀"
+        android:textColor="#FFFFFF"
+        android:textStyle="bold"
+        android:backgroundTint="#CE1126" />
+
+</LinearLayout>

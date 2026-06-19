@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@android:drawable/sym_def_app_icon"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.KolKhadamatAlYemen">
+        
+        <activity
+            android:name="com.maw.MainActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.KolKhadamatAlYemen">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity android:name="com.maw.ChatLogsActivity" android:exported="false" />
+        <activity android:name="com.maw.BookingsActivity" android:exported="false" />
+        <activity android:name="com.maw.NotificationsActivity" android:exported="false" />
+        <activity android:name="com.maw.CustomThemeActivity" android:exported="false" />
+        <activity android:name="com.maw.ConfirmationDialogActivity" android:exported="false" />
+        <activity android:name="com.maw.CategoriesActivity" android:exported="false" />
+
+    </application>
+
+</manifest>
