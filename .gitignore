@@ -1,0 +1,11 @@
+# Git configuration file
+# Ignore Gradle build outputs and caches
+.gradle/
+build/
+app/build/
+local.properties
+
+# Explicitly ensure app-debug.apk is tracked by Git and not ignored
+!app-debug.apk
+!/app-debug.apk
+

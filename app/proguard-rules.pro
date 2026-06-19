@@ -1,2 +1,6 @@
 # Proguard rules
--keep class com.maw.** { *; }
+-keepattributes Signature
+-keepattributes *Annotation*
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-dontwarn javax.annotation.**

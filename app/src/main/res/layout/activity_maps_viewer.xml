@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0F2225"
+    android:textDirection="rtl">
+
+    <TextView
+        android:id="@+id/maps_title_bar"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:background="#1E3235"
+        android:text="📍 تحديد الموقع الجغرافي والملاحة الرقمية"
+        android:textColor="#FFCC00"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:gravity="center" />
+
+    <LinearLayout
+        android:id="@+id/meters_tracking_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/maps_title_bar"
+        android:background="#122528"
+        android:padding="12dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tv_distance_value"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="المسافة لمزود الخدمة: جاري حساب الإحداثيات..."
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:gravity="right" />
+
+        <TextView
+            android:id="@+id/tv_coordinates"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="خط العرض: 15.3694 | خط الطول: 44.1910"
+            android:textColor="#88AAAA"
+            android:textSize="11sp"
+            android:gravity="right" />
+    </LinearLayout>
+
+    <!-- Simulated Interactive Map Component with Center Pin -->
+    <FrameLayout
+        android:id="@+id/map_simulation_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/meters_tracking_bar"
+        android:layout_above="@+id/navigation_actions_container">
+
+        <ImageView
+            android:id="@+id/img_map_background"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:src="@android:drawable/ic_menu_mapmode"
+            android:scaleType="centerCrop"
+            android:tint="#33AAAAAA" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:text="📍"
+            android:textSize="48sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="30dp"
+            android:text="اسحب الخريطة لتحديد الموقع يدوياً"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:gravity="center"
+            android:background="#88000000"
+            android:padding="6dp" />
+    </FrameLayout>
+
+    <!-- Navigation buttons -->
+    <LinearLayout
+        android:id="@+id/navigation_actions_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:background="#1E3235"
+        android:padding="16dp"
+        android:orientation="vertical">
+
+        <Button
+            android:id="@+id/btn_directions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🧭 فتح الاتجاهات في خرائط Google"
+            android:textColor="#000000"
+            android:backgroundTint="#FFCC00"
+            android:layout_marginBottom="12dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btn_gps_refresh"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="🛰️ تحديث GPS"
+                android:textColor="#FFFFFF"
+                android:backgroundTint="#34C759"
+                android:layout_marginLeft="8dp" />
+
+            <Button
+                android:id="@+id/btn_save_latlng"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="💾 حفظ الإحداثيات"
+                android:textColor="#FFFFFF"
+                android:backgroundTint="#007AFF" />
+        </LinearLayout>
+    </LinearLayout>
+
+</RelativeLayout>

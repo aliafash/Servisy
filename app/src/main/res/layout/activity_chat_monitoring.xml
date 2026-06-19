@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#0F2225"
+    android:padding="16dp"
+    android:textDirection="rtl">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="🛡️ منصة رقابة ورصد المحادثات المباشرة (المشرف)"
+        android:textColor="#FFCC00"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:gravity="right"
+        android:layout_marginBottom="16dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="قائمة قنوات الدردشات العامة والخاصة قيد الرقابة الآمنة:"
+        android:textColor="#88AAAA"
+        android:textSize="12sp"
+        android:gravity="right"
+        android:layout_marginBottom="12dp" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_monitored_chats"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+</LinearLayout>

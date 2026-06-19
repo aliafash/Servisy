@@ -3,62 +3,67 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:background="#162A2D"
     android:padding="20dp"
+    android:background="#1E3235"
     android:layout_gravity="center"
-    android:textDirection="rtl">
+    android:textDirection="rtl"
+    android:layout_margin="16dp">
 
     <TextView
-        android:id="@+id/dialogTitle"
+        android:id="@+id/dialog_title"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="⚠️ تأكيد حذف البيانات والمزودين!"
-        android:textColor="#CE1126"
+        android:text="🔒 تأكيد العملية الحساسة"
+        android:textColor="#FFFFFF"
         android:textSize="18sp"
         android:textStyle="bold"
-        android:layout_marginBottom="12dp"
-        android:gravity="center"
-        android:textDirection="rtl" />
+        android:gravity="right"
+        android:layout_marginBottom="12dp" />
 
     <TextView
-        android:id="@+id/dialogMessage"
+        android:id="@+id/dialog_message"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="انتبه: هل أنت متأكد من الحذف النهائي؟ سيتم مسح السجل أو مزود الخدمة تماماً من قاعدة البيانات صامتاً في الخلفية مع فرض حظر أمني شامل دون إمكانية فكه لاحقاً."
-        android:textColor="#FFFFFF"
+        android:text="هذه العملية حساسة للغاية وتتطلب صلاحيات الإدارة العليا. يرجى إدخال كلمة مرور الحذف لتأكيد رغبتك في الاستمرار:"
+        android:textColor="#DDDDDD"
         android:textSize="14sp"
-        android:layout_marginBottom="20dp"
-        android:gravity="center"
-        android:textDirection="rtl" />
+        android:gravity="right"
+        android:layout_marginBottom="16dp" />
+
+    <EditText
+        android:id="@+id/dialog_password_input"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:hint="إدخال كلمة مرور الحذف السري"
+        android:textColor="#FFFFFF"
+        android:textColorHint="#888888"
+        android:background="#0F2225"
+        android:padding="10dp"
+        android:inputType="textPassword"
+        android:gravity="right"
+        android:layout_marginBottom="20dp" />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:gravity="center"
-        android:textDirection="rtl">
+        android:gravity="left">
 
         <Button
-            android:id="@+id/btnCancelDelete"
-            android:layout_width="0dp"
+            android:id="@+id/btn_cancel"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="إلغاء وفصل العملية ❌"
+            android:text="إلغاء ❌"
             android:textColor="#FFFFFF"
-            android:textStyle="bold"
-            android:backgroundTint="#223639"
-            android:layout_marginEnd="6dp" />
+            android:backgroundTint="#FF4444"
+            android:layout_marginRight="8dp" />
 
         <Button
-            android:id="@+id/btnConfirmDelete"
-            android:layout_width="0dp"
+            android:id="@+id/btn_confirm"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="موافق، احذف نهائياً 🎯"
-            android:textColor="#162A2D"
-            android:textStyle="bold"
-            android:backgroundTint="#FFD700"
-            android:layout_marginStart="6dp" />
+            android:text="تأكيد وحذف 🗑️"
+            android:textColor="#000000"
+            android:backgroundTint="#FFCC00" />
     </LinearLayout>
-
 </LinearLayout>
