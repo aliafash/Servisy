@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:background="#0d1b1e"
+    android:padding="16dp"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <TextView
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:textColor="#ffd700"
+        android:id="@+id/notificationsTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:text="�� بث الإشعارات الإدارية للجميع"/>
+    <TextView
+        android:textSize="12sp"
+        android:textColor="#ffffff"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:text="قم بإرسال إشعارات جماعية سريعة وفورية لجميع الأجهزة النشطة في ثوانٍ."/>
+    <EditText
+        android:textColor="#ffffff"
+        android:textColorHint="#88ffffff"
+        android:id="@+id/etNotificationTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="12dp"
+        android:hint="عنوان الإشعار الإداري"
+        android:backgroundTint="#ffd700"/>
+    <EditText
+        android:textColor="#ffffff"
+        android:textColorHint="#88ffffff"
+        android:id="@+id/etNotificationBody"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:hint="محتوى الإشعار بالتفصيل..."
+        android:backgroundTint="#ffd700"/>
+    <Button
+        android:textColor="#ffffff"
+        android:id="@+id/btnSendNotification"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="بث الإشعار الآن ��"
+        android:backgroundTint="#ce1126"/>
+</LinearLayout>

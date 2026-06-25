@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:background="#0d1b1e"
+    android:padding="16dp"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <TextView
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:textColor="#ffd700"
+        android:id="@+id/chatTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:text="�� مراقبة غرف المحادثات الفعالة بالدليل"/>
+    <TextView
+        android:textSize="12sp"
+        android:textColor="#ffffff"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:text="مشاهدة وتحليل المحادثات النشطة وحمايتها من الاختراق والاحتيال بالتزامن الأمني المطور."/>
+    <LinearLayout
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="12dp">
+        <Button
+            android:textColor="#162a2d"
+            android:id="@+id/btnExportCSV"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="تصدير CSV ��"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:backgroundTint="#ffd700"/>
+        <Button
+            android:textColor="#ffffff"
+            android:id="@+id/btnClearHistory"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="مسح السجل ��"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:backgroundTint="#ce1126"/>
+    </LinearLayout>
+    <ListView
+        android:id="@+id/chatsListView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:divider="#223639"
+        android:dividerHeight="1dp"
+        android:layout_weight="1"/>
+</LinearLayout>

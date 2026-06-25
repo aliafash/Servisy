@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:background="#0d1b1e"
+    android:padding="16dp"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <TextView
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:textColor="#ffd700"
+        android:id="@+id/bookingsTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:text="�� إدارة ومتابعة الحجوزات المجدولة"/>
+    <TextView
+        android:textSize="12sp"
+        android:textColor="#ffffff"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:text="تصفح كافة طلبات حجز المواعيد والحالات المهنية بين العملاء ومقدمي الخدمات."/>
+    <ListView
+        android:id="@+id/bookingsListView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:divider="#223639"
+        android:dividerHeight="1dp"/>
+</LinearLayout>

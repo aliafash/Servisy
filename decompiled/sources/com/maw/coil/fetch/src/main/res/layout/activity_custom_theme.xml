@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:background="#0d1b1e"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <LinearLayout
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+        <TextView
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="#ffd700"
+            android:id="@+id/themeTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:text="�� تخصيص مظهر التطبيق وقوانين التسجيل"/>
+        <TextView
+            android:textSize="12sp"
+            android:textColor="#ffffff"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:text="تعديل الألوان والخطوط وإدارة البنرات وقوانين التسجيل ومؤشرات المساعد بشكل تفاعلي."/>
+        <LinearLayout
+            android:orientation="vertical"
+            android:background="#162a2d"
+            android:padding="12dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp">
+            <TextView
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#ffd700"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:text="�� تغيير ألوان الواجهة الرئيسية"/>
+            <EditText
+                android:textColor="#ffffff"
+                android:id="@+id/etPrimaryColor"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="#CE1126"
+                android:hint="اللون الرئيسي (Primary Hex)"/>
+            <EditText
+                android:textColor="#ffffff"
+                android:id="@+id/etAccentColor"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="#FFD700"
+                android:hint="اللون الفرعي (Accent Hex)"/>
+        </LinearLayout>
+        <LinearLayout
+            android:orientation="vertical"
+            android:background="#162a2d"
+            android:padding="12dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp">
+            <TextView
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#ffd700"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:text="�� حجم وأماكن أيقونات الدردشة والمساعد"/>
+            <TextView
+                android:textSize="11sp"
+                android:textColor="#ffffff"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="حجم أيقونة الدردشة الفورية"/>
+            <SeekBar
+                android:id="@+id/sbChatIconSize"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:max="100"
+                android:progress="60"/>
+            <TextView
+                android:textSize="11sp"
+                android:textColor="#ffffff"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="حجم أيقونة المساعد الذكي"/>
+            <SeekBar
+                android:id="@+id/sbAssistantSize"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="100"
+                android:progress="50"/>
+        </LinearLayout>
+        <Button
+            android:textColor="#ffffff"
+            android:id="@+id/btnSaveThemeSettings"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="حفظ وتطبيق المظهر الجديد ��"
+            android:backgroundTint="#ce1126"/>
+    </LinearLayout>
+</ScrollView>

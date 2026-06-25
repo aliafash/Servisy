@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:background="#0d1b1e"
+    android:padding="16dp"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <TextView
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:textColor="#ffd700"
+        android:id="@+id/categoriesTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:text="�� إدارة هيكلية الأقسام والمدن اليمنية"/>
+    <TextView
+        android:textSize="12sp"
+        android:textColor="#ffffff"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:text="تصفح وتعديل وحظر الأقسام المهنية المعتمدة وإخفاؤها أو ترشيحها للتخصيص الفعلي."/>
+    <LinearLayout
+        android:orientation="vertical"
+        android:background="#162a2d"
+        android:padding="12dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="12dp">
+        <EditText
+            android:textColor="#ffffff"
+            android:textColorHint="#33ffffff"
+            android:id="@+id/etCategoryNameAr"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="اسم القسم بالعربية"/>
+        <Button
+            android:textColor="#ffd700"
+            android:id="@+id/btnPickCategoryIcon"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="اختر أيقونة القسم ��️"
+            android:backgroundTint="#223639"/>
+    </LinearLayout>
+    <ListView
+        android:id="@+id/categoriesListView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:divider="#223639"
+        android:dividerHeight="1dp"/>
+</LinearLayout>
